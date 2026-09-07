@@ -1,0 +1,262 @@
+# 社思现场 VOL.11
+
+![img](https://imgs.zhubai.love/a5f3110231f84283857138e19580ed28.png)
+
+MouT.me
+
+·2022-03-22
+
+# 01. Twitter “撤回”了上周按时间排序的 Timeline Tab 的修改
+
+> 参考链接：https://twitter.com/TwitterSupport/status/1503443926258180106?s=20&t=vIfxBYoRYJNoteSXF5xQ9g
+
+上周提到的 Twitter 修改的双时间线排序 Tab 的更新，Twitter 又给改回来了……
+
+（Twitter 真的是……最近老顶不住用户压力，都撤回了两次修改了。都说你学学人家微信嘛，说不改就不改。）
+
+归结到底，还是需求矛盾点找错了。那部分抗拒的用户不是单纯的想要找回“按时间排序的最新时间线”，而是排斥“算法时间线”。所以上周的修改，导致他们会默认先到“算法时间线”，反而要每次都要手动向左滑一次，才能切换到“最新时间线”。
+
+表面上来看，是切换的成本降低了。但实际上，人家根本不想切换。
+
+![img](https://imgs.zhubai.love/dcd61eacf1ca4b728d38992518eb4a2f.png)
+
+图片加载中
+
+
+
+# 02. Twitter Podcast 增加 Share with you 、Most shared 功能
+
+> 参考链接：https://twitter.com/alex193a/status/1504481390372421632?s=21
+
+看来很多人对 Twitter Podcast 功能的猜测错了。（比如我……）
+
+我之前以为 Twitter 的播客功能，是继承自 Space 的良好发挥，为 Space 生态的创作者，提供更直接的录制功能，完成创作内容沉淀的闭环。
+
+结果现在的截图看起来，更像是一个我关注的用户分享到 Twitter 的播客的 Feed 流。甚至没有提供端内的播客播放器。
+
+图 2 是 Twitter Podcast 中展示的一个 Spotify 播客链接的例子。
+
+![img](https://imgs.zhubai.love/3222906999a14f3f95da9ab33b58368c.png)
+
+图片加载中
+
+
+
+# 03. 小道消息：Twitter 近期其他更新
+
+- Twitter Space 正式开始测试 Clips 功能（Clips 功能真的开发好久了……被灰度到的 iOS 用户在主持 Space 时，可以在开启了录制的 Space 中，创建 30 秒的剪辑并分享出去。所有用户都可以在 Timeline 中看到并收听 Clips 的内容。）
+- Twitter 计划允许用户自定义性别称谓（中国人的确不是很理解这种需求的迫切程度）
+- Twitter 计划在推文回复中增加“Author”标签，帮助区分推文作者的回复
+- Twitter 将允许把 Communities 添加到桌面
+- Twitter 搜索 Community 功能正式上线
+
+![img](https://imgs.zhubai.love/20c85d0e2bf741e3819bfe1d63fcf4d8.png)
+
+图片加载中
+
+
+
+# 04. QQ 支持直接打开微信小程序了
+
+好事，腾讯内部终于舍得打通了。以前 QQ 小程序、小游戏大改版的时候，看开发文档就发现基本完全复刻了微信小程序的路子。当时就觉得腾讯是想把生态打通的。
+
+但不知道为啥这么久才做？
+
+于是顺手测试了一下我之前做的小程序，的确直接在 QQ 里就能搜到，能打开。但是……
+
+获取用户信息要跳回微信，人脸识别要跳回微信，客服还是跳回到微信，地图导航等功能不兼容，Webview 的内容打不开……问题还是挺多的= =
+
+不过话说回来……你就说生态通没通吧。
+
+![img](https://imgs.zhubai.love/dbea791c641343c08ac76f19dae384dc.png)
+
+图片加载中
+
+
+
+# 05. Clubhouse 正式推出 Social Room 和 Wave Bar 功能
+
+> 参考链接：https://blog.clubhouse.com/a-new-wave-of-updates/
+
+第 8 期提到的 Social Room 功能，正式上线啦~
+
+不得不说，越来越多的人在 Clubhouse 上和朋友日常沟通，分享观后感、组团 D&D、助眠、决定晚餐吃啥……
+
+Clubhouse 博客这句话写得很好：
+
+> “这些日常的瞬间，往往不会成为今日的头条，但这正是让 Clubhouse 更加美好的内核。”
+
+说回本次更新的两个主要功能：
+
+- Wave Bar：首页上方新增一栏“Talk With Friends”，展示当前在线好友。用户可以“Wave”向好友发起互动。Wave 将会开启新的 Social Room ，而不是 Private Room。
+- Speaker 的好友可以加入 Social Room，用户可在房间顶部快速 Ping 好友，邀请他们加入。
+
+![thumbnail](https://imgs.zhubai.love/95ec519291574270b8fc24e62776d8fc.png)
+
+图片加载中
+
+![thumbnail](https://imgs.zhubai.love/7fcc4af0cbb6410ca67a934abc343074.png)
+
+图片加载中
+
+
+
+# 06. 亚马逊推出类 Clubhouse 的音频直播产品 Amp
+
+> 参考链接：https://www.onamp.com/
+
+虽然是 Live Audio 的范畴，但亚马逊这个 Amp 和 Clubhouse、Twitter Spaces 以及 Spotify 的 Greenroom 打法都不相同。
+
+比起 Clubhouse 更像是 Club 沙龙，Amp 更像是广播电台这种及其古典的形态。主持人可以分享喜欢的音乐，甚至像接听听众来电一样和房间内的其他用户互动。
+
+Amp 副总裁 John Ciancutti 提出的愿景是——
+
+> “任何人只要拿着手机，就可以成为 DJ。”
+
+虽然目前还不确定 Amp 的未来如何，但值得肯定的是，越来越多人认同音频在内容消费和互动方面的价值了。
+
+![img](https://imgs.zhubai.love/b37cf594c03c4c8aaafeb62dda53d53f.png)
+
+图片加载中
+
+
+
+# 07. Snapchat 正在密谋 Community
+
+现在只是[逆向大神 Alessandro Paluzzi 发现](https://twitter.com/alex193a/status/1504380359806439425?s=21)，在 Snapchat 的代码中出现了“Add Community”的入口，还不清楚 Snap 将会让“Community”在自己的生态中扮演什么样的角色。
+
+我目测不会是基于文字内容的“社区”，社区的重点在通过内容聚集共同圈层的人，更高质量的文字内容沉淀和阅后即焚、和 Snapchat 想要营造的“低社交压力”冲突较大。
+
+所以，结合 Snapchat 更为年轻的用户群体，这里的 Community 很可能是指，学校的“社团”。
+
+（完了一夜间全都开始回来做校园了……）
+
+![img](https://imgs.zhubai.love/0ebceecbfe134374a46ed6983b20ca4e.png)
+
+图片加载中
+
+
+
+# 08. Snapchat 正式推出 Custom Landmarkers ，帮助创作者强化 AR 镜头创作能力
+
+> 参考链接：https://newsroom.snap.com/en-GB/custom-landmarkers-launch-in-lens-studio
+
+很多人可能低估了 Snap 的 AR 和 AI 能力。
+
+19 年，Snap 推出了 [Landmarkers](https://www.youtube.com/watch?v=jNs9kdSAOCA)，提供了基于标志性建筑创作 AR 镜头的功能。
+
+20 年，Snap 推出了 [Local Lenses](https://newsroom.snap.com/en-GB/city-painter)，允许用户在 360 度全景伦敦街头的建筑上协作绘制 AR 涂鸦。
+
+现在，Snap 把可识别地标扩充到了更大的范围——可由用户自定义。
+
+抛开技术难度，Snap 在 AR 的内容审查上也会面临巨大的压力。所以当前通过审查的“自定义地标”，需要通过实体的 Snapcodes（Snapchat 的二维码）来触发，或在创作者主页访问。
+
+![thumbnail](https://imgs.zhubai.love/74c8954b2a59412b8e45e0dab6065860.png)
+
+图片加载中
+
+![thumbnail](https://imgs.zhubai.love/c25ea7b23a01444c90963a30f01d55b5.png)
+
+图片加载中
+
+
+
+# 09. Snapchat 推出分享 Bitmoji 装扮的功能
+
+> 参考链接：https://newsroom.snap.com/en-GB/converse-x-bitmoji
+
+Bimoji 中可选择的装扮越来越多，用户在 Snapchat 中已经完全可以自由地通过个人形象来进行自我传达了。
+
+因此，Snapchat 推出了一键分享装扮的功能，方便用户和好友间共享装扮创意。
+
+在个人资料页的 Bitmoji 展示界面中，点击新增的“Share Outfit”，即可向好友发送一条带有你装扮形象的聊天消息。好友可试穿并保存到他们的 Bitmoji 中。
+
+![thumbnail](https://imgs.zhubai.love/a8559682a5b34565935f9d383270630e.png)
+
+图片加载中
+
+
+
+# 10. YouTube 计划提供更多直播功能
+
+> 参考链接：https://www.youtube.com/watch?v=aIBCfaI-LwQ
+
+- Go Live Together：新的移动端直播连麦模式，发送链接邀请其他人加入你的直播
+- Live Rings：在频道的头像外增加了类似 Ins “光圈”的设计（光圈+LIVE代表正在直播）。
+- Cross Channel Live Redirects：之前，千粉主播可以把观众“重定向”到自己其他频道的直播中，但不是自己的频道就不行。现在行了。
+- Full Screen Mode：可以将聊天公屏收起到右下角的小按钮，同时重要信息，比如投票等依然会有提示。说是下周末上线。
+- Live Q and A：观众可以在直播中提交问题，主播回答的问题将会被临时置顶在 Live Chat 顶部，以激励其他观众提交问题。
+
+![img](https://imgs.zhubai.love/09529af7ca914eb8a1d2ed9b0578db04.png)
+
+图片加载中
+
+
+
+# 11. Spotify 计划支持加密钱包和 NFT
+
+> 参考链接：https://twitter.com/financialtimes/status/1504344302788481026?s=21
+
+继 Twitter、Instagram、Reddit 之后，Spotify 也开始为 Web3 铺路了。
+
+不过应该和 上面那仨家伙不一样，Spotify 应该不会用 NFT 玩头像那些花里胡哨的玩意，预计主要还是用于正经的“数字资产所有权”。
+
+音乐数字藏品可能是目前最落地的 NFT 应用了。甚至有些组织中会探索一些更前沿的付费方式，比如持有 NFT 的人可获得播放收益分成等。
+
+其实之前 Facebook 那个 Libra 刚出来的时候，Spotify 的 CEO 就希望加密货币可以用于在 Spotify 中向艺术家付款。这样的付款方式是跨国界的，对于 Spotify 这种服务可能有巨大的想象空间。
+
+![thumbnail](https://imgs.zhubai.love/cd71ff9dda71488c843933701b4bf749.jpg)
+
+图片加载中
+
+
+
+# 12. 小道消息：Instagram 近期更新
+
+**1) Instagram 计划推出“Add Yours”贴纸**
+
+实际上这个功能开发很久了，以前叫“Remix Me”，现在改名“Add Yours”了。 Ins 可能希望通过这种方式促进用户像 TikTok 那样跟拍？
+
+**2) Instagram 正在测试通过地图浏览 Stories 和 Posts 的功能**
+
+很像 Snapchat 的 Snap Map，可以在地图上直接浏览相应位置发布的内容。
+
+（Instagram 整天抄 Snap = =||）
+
+![img](https://imgs.zhubai.love/cea1c37aa6f44f57b13d8df72cdba36d.png)
+
+图片加载中
+
+
+
+# 13. Lobby 开启桌面端版本 Beta 测试、上线新官网、开启校园增长黑客计划
+
+> 参考链接：https://lobby.game/
+
+我们的老对手 Lobby 沉寂许久之后有了新动作。
+
+**1) 开启桌面端版本 Beta 测试**
+
+用户可以直接在浏览器中使用 Lobby 创建房间、一起看视频、屏幕共享、一起听音乐等。
+
+**2) 上线新官网**，阐述了设计思路和商业化方向。比如，在 Services 中提到了几项服务：
+
+- Lobby Ads
+- 设计、设计咨询、可用性测试服务
+- 免费的照片编辑器
+
+**3) 开启校园增长黑客计划**
+
+招聘加州校园增长黑客，招募用户推广校园大使。
+
+![img](https://imgs.zhubai.love/0dfcec9c3f624b8db64b0a304eba8a1e.png)
+
+图片加载中
+
+
+
+Thanks for reading.
+
+Editor: [MouT.me](https://mout.me/)
+
+Inspired by 曾峰
