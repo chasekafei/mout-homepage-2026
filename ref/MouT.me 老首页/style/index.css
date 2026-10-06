@@ -1,0 +1,100 @@
+body {
+	background: #F6F6F7 url(../images/bg.jpg) 0 0 repeat-x;	
+	font: 12px/1.5 Verdana,'宋体',tahoma, Srial, helvetica, sans-serif;
+	margin:0;
+	padding:0;
+}
+a {
+	text-decoration:none;
+}
+.clear{
+	clear:both;
+}
+#content{
+}
+h1{
+	font-family: "Microsoft YaHei",Arial;
+	font-size: 64px;
+	font-weight: bold;
+	letter-spacing: 10px;
+	color: #45A8DF;
+	text-align:center;
+	margin-top: 10%;
+	text-indent: -9999px;
+	background:url(../images/nav.png) 0px 1000px no-repeat;
+
+}
+.menu {
+	height: 58px;
+	width:100%;
+	display: block;
+	position:absolute ;
+	top: 50%;
+	margin-top: -58px;
+}
+.menu ul {
+	list-style: none;
+	padding: 0;
+	margin: 0 auto;
+	width:984px;
+}
+.menu ul li {
+	float: left; 
+	overflow: hidden;/* 菜单子元素的内容超出不可见 */
+	position: relative;
+	text-align: center;
+	line-height: 58px;
+}
+.menu ul li a {
+	/* 必须是相对定位  */ 
+	position: relative;
+	display: block;
+	width: 246px;
+	height: 58px;
+	font-family: "Microsoft YaHei",Arial;
+	font-size: 24px;
+	font-weight: bold;
+	letter-spacing: 5px;
+	text-decoration: none;
+	cursor: pointer;
+}
+.menu ul li a span {
+	/* 所有层将使用绝对定位 */
+	position: absolute;
+	left: 0;
+	width: 246px;
+}
+.menu ul li a span.out {
+	bottom: 0px;
+}
+.menu ul li a span.over, .menu ul li a span.bg {
+	/* 起初.over层和.bg层相对a元素-100px以达到隐藏 */  
+	bottom: -58px;
+}
+#menu2 {
+	background: #FFF;
+	background:url(../images/nav-line.png) 0 0 repeat-x;
+}
+#menu2 ul li a {
+	color: #45A8DF;
+}
+#menu2 ul li a span.over {
+	color: #45A8DF;
+	background:url(../images/nav.png) -246px 0 no-repeat;
+}
+
+#menu2 p{
+	clear:both;
+	height: 58px;
+	width: 763px;
+	background:url(../images/toolbar.png) 0 0 no-repeat;
+	position: relative;
+	left: 50%;
+	margin: 10px 0 0 -381px;
+}
+#menu2 p span{
+	color:#45A8DF;
+	font-size: 36px;
+	font-family: "Microsoft YaHei",Arial;
+	padding-left: 220px;
+}
