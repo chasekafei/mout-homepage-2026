@@ -1,0 +1,45 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite build & cache
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python tools
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Blender autosave
+*.blend1
+*.blend2
+
+# Logs & caches
+*.log
+.cache/
+.eslintcache
+coverage/
