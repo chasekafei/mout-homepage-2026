@@ -89,5 +89,30 @@ async function legacy() {
   console.log("legacy: copied");
 }
 
-const tasks = { scene, photos, audio, legacy };
+async function scene3d() {
+  const from = P(".cache/bake");
+  const dir = P("public/scene/create/3d");
+  await mkdir(dir, { recursive: true });
+  const { execFileSync } = await import("node:child_process");
+  execFileSync(P("node_modules/.bin/gltfpack"), ["-i", path.join(from, "room.glb"), "-o", path.join(dir, "room.glb"),
+    "-cc", "-kn", "-ke", "-kv", "-vp", "16", "-vtf", "-vc", "8"], { stdio: "inherit" });
+  // atlas and backdrop hold encoded radiance: keep chroma at full resolution
+  for (const [name, widths] of [["atlas", [4096, 2048]], ["backdrop", [2560, 1600]]]) {
+    const src = path.join(from, `${name}.png`);
+    if (!(await exists(src))) { console.warn(`skip ${src}`); continue; }
+    for (const w of widths) {
+      const img = sharp(src).resize({ width: w, kernel: "lanczos3" });
+      await img.clone().avif({ quality: 72, effort: 6, chromaSubsampling: "4:4:4" }).toFile(path.join(dir, `${name}_${w}.avif`));
+      await img.clone().webp({ quality: 92, effort: 5, smartSubsample: true }).toFile(path.join(dir, `${name}_${w}.webp`));
+    }
+  }
+  await sharp(path.join(from, "lut.png")).toColourspace("srgb").png({ compressionLevel: 9 }).toFile(path.join(dir, "lut.png"));
+  const room = JSON.parse(await readFile(path.join(from, "room.json"), "utf8"));
+  const bd = path.join(from, "backdrop.json");
+  if (await exists(bd)) room.backdrop = JSON.parse(await readFile(bd, "utf8"));
+  await writeFile(path.join(dir, "scene.json"), JSON.stringify(room));
+  for (const f of (await readdir(dir)).sort()) console.log(`  ${f} ${((await stat(path.join(dir, f))).size / 1024).toFixed(0)} KB`);
+}
+
+const tasks = { scene, scene3d, photos, audio, legacy };
 for (const [k, fn] of Object.entries(tasks)) if (!only || only === k) await fn();

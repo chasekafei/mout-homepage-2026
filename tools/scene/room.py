@@ -99,69 +99,6 @@ def floor_mat():
     return m
 
 
-def ext_mat(name, color, rough=0.85, haze=srgb("#c9d6e3"), dist=260.0, hstr=1.0, windows=False):
-    """Exterior material faded toward a haze colour with camera distance."""
-    key = f"ext_{name}"
-    if key in B._mats:
-        return B._mats[key]
-    m = bpy.data.materials.new(key)
-    m.use_nodes = True
-    nt = m.node_tree
-    p = nt.nodes.get("Principled BSDF")
-    p.inputs["Roughness"].default_value = rough
-    p.inputs["Specular IOR Level"].default_value = 0.2
-    out = nt.nodes.get("Material Output")
-    base = nt.nodes.new("ShaderNodeRGB")
-    base.outputs[0].default_value = (*color, 1)
-    col_out = base.outputs[0]
-    if windows:
-        tc = nt.nodes.new("ShaderNodeTexCoord")
-        br = nt.nodes.new("ShaderNodeTexBrick")
-        br.offset = 0.0
-        br.inputs["Scale"].default_value = 1.0
-        br.inputs["Brick Width"].default_value = 3.2
-        br.inputs["Row Height"].default_value = 3.0
-        br.inputs["Mortar Size"].default_value = 0.9
-        br.inputs["Color1"].default_value = (*srgb("#6d7a86"), 1)
-        br.inputs["Color2"].default_value = (*srgb("#7c8995"), 1)
-        nt.links.new(tc.outputs["Object"], br.inputs["Vector"])
-        mix = nt.nodes.new("ShaderNodeMix")
-        mix.data_type = "RGBA"
-        nt.links.new(br.outputs["Fac"], mix.inputs["Factor"])
-        nt.links.new(br.outputs["Color"], mix.inputs["A"])
-        nt.links.new(base.outputs[0], mix.inputs["B"])
-        col_out = mix.outputs["Result"]
-    nt.links.new(col_out, p.inputs["Base Color"])
-    cam = nt.nodes.new("ShaderNodeCameraData")
-    math1 = nt.nodes.new("ShaderNodeMath")
-    math1.operation = "DIVIDE"
-    math1.inputs[1].default_value = -dist
-    nt.links.new(cam.outputs["View Distance"], math1.inputs[0])
-    ex = nt.nodes.new("ShaderNodeMath")
-    ex.operation = "EXPONENT"
-    nt.links.new(math1.outputs[0], ex.inputs[0])
-    inv = nt.nodes.new("ShaderNodeMath")
-    inv.operation = "SUBTRACT"
-    inv.inputs[0].default_value = 1.0
-    nt.links.new(ex.outputs[0], inv.inputs[1])
-    em = nt.nodes.new("ShaderNodeEmission")
-    em.inputs["Color"].default_value = (*haze, 1)
-    # haze glows for the camera only; it should not light the room
-    lp = nt.nodes.new("ShaderNodeLightPath")
-    hs_ = nt.nodes.new("ShaderNodeMapRange")
-    hs_.inputs["To Min"].default_value = hstr * 0.15
-    hs_.inputs["To Max"].default_value = hstr
-    nt.links.new(lp.outputs["Is Camera Ray"], hs_.inputs["Value"])
-    nt.links.new(hs_.outputs[0], em.inputs["Strength"])
-    ms = nt.nodes.new("ShaderNodeMixShader")
-    nt.links.new(inv.outputs[0], ms.inputs["Fac"])
-    nt.links.new(p.outputs["BSDF"], ms.inputs[1])
-    nt.links.new(em.outputs["Emission"], ms.inputs[2])
-    nt.links.new(ms.outputs["Shader"], out.inputs["Surface"])
-    B._mats[key] = m
-    return m
-
-
 # ---------------------------------------------------------------- shell
 
 def planks(w=0.19, gap=0.004, seed=3):
@@ -288,86 +225,9 @@ def build_shell():
 
 # ---------------------------------------------------------------- exterior
 
-def build_exterior(seed=4):
-    B.use_collection("exterior")
-    rng = random.Random(seed)
-    base_z = -13.0
-    ground = ext_mat("ground", srgb("#8c9a74"), dist=420)
-    B.box_minmax("ext_ground", (-900, 4, base_z - 1), (1400, 2500, base_z), ground, bevel=0)
-    road = ext_mat("road", srgb("#9a9a96"), dist=420)
-    B.box_minmax("ext_road", (-900, 48, base_z), (1400, 58, base_z + 0.05), road, bevel=0)
-
-    leaf_cols = ["#5f8a3a", "#6d9842", "#4f7a33", "#7aa64a", "#668f3e", "#86ad52"]
-    trunk = ext_mat("trunk", srgb("#5d4a3a"))
-    house_cols = ["#efeae2", "#e7e1d7", "#f4f1ec", "#ddd6cc", "#e9e4dc"]
-    roof_cols = ["#7d7f84", "#6e7074", "#8a8580", "#a0786a"]
-
-    lumps = bpy.data.textures.new("lumps", "CLOUDS")
-    lumps.noise_scale = 1.3
-    lumps.noise_depth = 2
-
-    def tree(x, y, s, zb=base_z):
-        B.cylinder(f"tr_{x:.0f}_{y:.0f}", 0.25 * s, 3.0 * s, (x, y, zb + 1.5 * s), material=trunk, verts=8, cap=False)
-        m = ext_mat(f"leaf{rng.randint(0, len(leaf_cols) - 1)}", srgb(rng.choice(leaf_cols)), rough=0.9)
-        for k in range(rng.randint(3, 5)):
-            r = s * rng.uniform(1.4, 2.2)
-            bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=r, location=(
-                x + rng.uniform(-1.4, 1.4) * s, y + rng.uniform(-1.2, 1.2) * s, zb + s * (3.8 + rng.uniform(0, 2.4))))
-            o = bpy.context.active_object
-            o.scale = (1, 1, rng.uniform(0.8, 1.05))
-            o.rotation_euler = (rng.random(), rng.random(), rng.random())
-            o.data.materials.append(m)
-            o.data.shade_smooth()
-            dm = o.modifiers.new("lumps", "DISPLACE")
-            dm.texture = lumps
-            dm.strength = r * 0.35
-            dm.texture_coords = "GLOBAL"
-            for c in o.users_collection:
-                c.objects.unlink(o)
-            B.link(o)
-
-    def house(x, y, w, d, h, roof=True, rot=0.0):
-        col = srgb(rng.choice(house_cols))
-        B.box(f"hs_{x:.0f}_{y:.0f}", (w, d, h), (x, y, base_z + h / 2), (0, 0, rot),
-              ext_mat(f"house{len(B._mats)}", col, windows=True, dist=380), bevel=0.15)
-        rm = ext_mat(f"roof{rng.randint(0, 3)}", srgb(rng.choice(roof_cols)), rough=0.7)
-        if roof:
-            rh = min(w, d) * 0.35
-            # gabled roof as a rotated box pair
-            B.box(f"rf_{x:.0f}_{y:.0f}", (w * 1.05, d * 0.62, 0.35), (x, y - d * 0.24, base_z + h + rh * 0.45),
-                  (math.degrees(math.atan2(rh, d / 2)), 0, rot), rm, bevel=0.05)
-            B.box(f"rb_{x:.0f}_{y:.0f}", (w * 1.05, d * 0.62, 0.35), (x, y + d * 0.24, base_z + h + rh * 0.45),
-                  (-math.degrees(math.atan2(rh, d / 2)), 0, rot), rm, bevel=0.05)
-        else:
-            B.box(f"rp_{x:.0f}_{y:.0f}", (w * 0.3, d * 0.3, 1.2), (x + w * 0.2, y, base_z + h + 0.6), (0, 0, rot),
-                  ext_mat("roofbox", srgb("#d8d4cc")), bevel=0.05)
-
-    # near band: tree canopies right below the window and low rooftops
-    for i in range(16):
-        x = rng.uniform(-30, 70)
-        y = rng.uniform(26, 60)
-        tree(x, y, rng.uniform(0.8, 1.25))
-    for i in range(22):
-        house(rng.uniform(-30, 80), rng.uniform(34, 110), rng.uniform(8, 14), rng.uniform(7, 11), rng.uniform(6, 10),
-              roof=rng.random() < 0.45, rot=rng.uniform(-8, 8) * math.pi / 180)
-    # middle band
-    for i in range(140):
-        tree(rng.uniform(-120, 260), rng.uniform(70, 420), rng.uniform(1.6, 2.6))
-    for i in range(36):
-        house(rng.uniform(-100, 280), rng.uniform(90, 420), rng.uniform(12, 24), rng.uniform(10, 18),
-              rng.uniform(7, 18), roof=rng.random() < 0.35)
-    # far skyline
-    sky_m = ext_mat("skyline", srgb("#b4c3d2"), dist=520, hstr=1.0)
-    for i in range(90):
-        w = rng.uniform(30, 80)
-        h = rng.uniform(30, 110) * (1.4 if rng.random() < 0.15 else 1)
-        x = rng.uniform(-600, 2400)
-        y = rng.uniform(1900, 2600)
-        B.box(f"sky_{i}", (w, w * 0.8, h), (x, y, base_z + h / 2), (0, 0, 0), sky_m, bevel=0)
-    # utility pole
-    pole = ext_mat("pole", srgb("#4b4744"))
-    B.cylinder("pole", 0.22, 14, (24, 36, base_z + 7), material=pole, verts=8)
-    B.box("pole_bar", (3.2, 0.2, 0.2), (24, 36, base_z + 12.6), material=pole, bevel=0)
+def build_exterior():
+    import exterior
+    exterior.build()
 
 
 # ---------------------------------------------------------------- world + lights
@@ -452,6 +312,7 @@ def build_world(cloud=True):
     nt.links.new(cam_sky, gain.inputs["A"])
     gain.inputs["B"].default_value = (CAM_SKY, CAM_SKY, CAM_SKY, 1)
     amb = nt.nodes.new("ShaderNodeMix")
+    amb.name = "amb_sky"
     amb.data_type = "RGBA"
     amb.blend_type = "MULTIPLY"
     amb.inputs["Factor"].default_value = 1.0

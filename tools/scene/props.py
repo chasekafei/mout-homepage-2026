@@ -97,7 +97,7 @@ def build_chair():
 def build_rug():
     B.use_collection("room")
     m = B.mat_image("rug", "rug.png", rough=0.95, spec=0.1, repeat=(3, 3), interp="Closest")
-    B.plane("rug", 2.6, 2.2, (-0.6, 0.7, 0.008), (-90, 0, -24), m)
+    B.plane("rug", 2.6, 2.2, (-0.6, 0.7, 0.009), (-90, 0, -24), m)
     B.box("rug_base", (2.6, 2.2, 0.008), (-0.6, 0.7, 0.004), (0, 0, -24), B.mat("rug_edge", srgb("#6a6762"), 0.95), bevel=0.003)
 
 

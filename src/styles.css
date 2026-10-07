@@ -50,6 +50,9 @@ a { color: inherit; }
 }
 .app.is-ready .stage::before { opacity: 0; }
 .stage.is-pointing { cursor: pointer; }
+.stage-3d { touch-action: none; cursor: grab; }
+.stage-3d.is-dragging { cursor: grabbing; }
+.stage-3d .beacon { left: 0; top: 0; will-change: transform; }
 .stage-canvas, .stage-wave { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage-wave { pointer-events: none; }
 .stage-img { position: absolute; max-width: none; }
