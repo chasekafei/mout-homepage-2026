@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PODCAST, PRODUCTS, SCENES, STATES, hotspotByRoute, isScene, type SceneId, type StateId } from "./content/site";
+import { PODCAST, PRODUCTS, SCENES, STATES, WORK, hotspotByRoute, isScene, type SceneId, type StateId } from "./content/site";
 import { player, usePlayer } from "./lib/audio";
 import { navigate, parsePath, usePath } from "./lib/router";
 import { SceneStage, type ScreenRect } from "./scene/SceneStage";
@@ -8,6 +8,7 @@ import { WritingPanel } from "./panels/WritingPanel";
 import { PodcastPanel } from "./panels/PodcastPanel";
 import { ProductsPanel } from "./panels/ProductsPanel";
 import { ProjectPanel, ThoughtPanel } from "./panels/NowPanels";
+import { WorkPanel } from "./panels/WorkPanels";
 import { AboutPanel, BooksPanel, CatsPanel, ChatPanel, IndexPanel, LegacyPanel, WindowPanel } from "./panels/MiscPanels";
 
 type View = { key: string; kind: string; title: string; hotspot: number; side?: "right"; back?: string; wide?: boolean; body: JSX.Element } | null;
@@ -192,6 +193,14 @@ function resolveView(scene: SceneId, state: string, rest: string, go: (to: strin
       return { key: "project", kind: h.kind, title: "现在在做：MouT.me", hotspot: id, body: <ProjectPanel go={go} /> };
     case "thought":
       return { key: "thought", kind: h.kind, title: "最近在想", hotspot: id, body: <ThoughtPanel go={go} /> };
+    case "agent":
+    case "social":
+    case "games":
+    case "brand":
+    case "gov": {
+      const w = WORK.find((x) => x.id === h.id)!;
+      return { key: "work", kind: h.kind, title: w.name, hotspot: id, body: <WorkPanel id={w.id} go={go} /> };
+    }
   }
   return null;
 }

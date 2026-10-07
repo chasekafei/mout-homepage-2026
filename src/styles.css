@@ -375,6 +375,19 @@ a { color: inherit; }
 .now-q { margin: 4px 0 18px; padding: 14px 16px; border-left: 4px solid var(--yellow); background: var(--paper-2); font: 700 18px/1.6 var(--sans); }
 .now-thought p { color: var(--ink-2); }
 
+.work-items { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 2px; }
+.work-items li { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.work-items strong { font-size: 14px; }
+.work-items p { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
+.work-carry { margin: 18px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--graphite); color: #eef2f0; font-size: 14px; }
+.work-carry span { display: block; font: 600 11px/1.6 var(--mono); letter-spacing: 0.08em; color: var(--teal-glow); }
+.work-chain { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.work-chain li { display: flex; align-items: center; }
+.work-chain li + li::before { content: ""; width: 14px; height: 2px; background: var(--mint); }
+.work-chain button { font: 13px/1 var(--sans); padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink-2); cursor: pointer; }
+.work-chain button:hover { background: #fff; }
+.work-chain .is-on button { background: var(--ink); color: #fff; border-color: transparent; box-shadow: 0 0 0 3px #2fc9ab55; }
+
 /* index */
 .index-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .index-list a { display: grid; gap: 1px; padding: 10px 12px; border-radius: 10px; background: var(--paper-2); text-decoration: none; }

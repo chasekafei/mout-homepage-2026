@@ -8,7 +8,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const P = (...p) => path.join(ROOT, ...p);
 // node build-assets.mjs [task] [scene]; scene tasks default to every scene that has source files.
 const only = process.argv[2];
-const SCENES = process.argv[3] ? [process.argv[3]] : ["now", "create"];
+const SCENES = process.argv[3] ? [process.argv[3]] : ["now", "create", "work"];
 
 async function exists(f) {
   try { await stat(f); return true; } catch { return false; }

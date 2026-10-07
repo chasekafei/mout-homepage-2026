@@ -12,10 +12,23 @@ from mathutils import Vector
 import blib as B
 
 DESK_TOP = 0.76
-# work-surface frame: the character sits at local (0, -0.42) facing +Y
-DESK_ROOT = ((-0.1, 1.12, 0.0), -24.0)
+# Seat centre in world space and the way the character faces (degrees, + = left of the cameras' +Y).
+# The body, chair and work surface share this heading, so whatever he looks at sits straight ahead of him;
+# turning the whole seat to camera-right keeps that spot clear of his head and shoulders.
+SEAT = (-0.42, 0.948)
+YAW = -36.0
 # chair-space empty (origin at the seat centre, facing +Y), relative to the desk frame
-CHAIR = ((0.04, -0.17, 0.0), 16.0)
+CHAIR = ((0.0, -0.17, 0.0), 0.0)
+
+
+def _desk_root():
+    a = math.radians(YAW)
+    cx, cy = CHAIR[0][0], CHAIR[0][1]
+    return ((SEAT[0] - (cx * math.cos(a) - cy * math.sin(a)), SEAT[1] - (cx * math.sin(a) + cy * math.cos(a)), 0.0), YAW)
+
+
+# work-surface frame: the character sits at local (0, -0.17) facing +Y
+DESK_ROOT = _desk_root()
 SEAT_Z = 0.47
 
 CAMERAS = [

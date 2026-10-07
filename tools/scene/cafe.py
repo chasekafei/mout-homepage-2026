@@ -338,8 +338,7 @@ def build_table_props():
     B.use_collection("desk_props")
     z = DESK_TOP
     r = table_root
-    # the character's torso hides the left half of the table from the camera: keep things to his right
-    laptop_open(r, (0.38, 0.4, z), -32)
+    laptop_open(r, (0.03, 0.33, z), 0)
     coaster(r, (0.62, 0.1, z), 10)
     latte(r, (0.84, 0.26, z))
     phone(r, (0.06, 0.62, z), 12)

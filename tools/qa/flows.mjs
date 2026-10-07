@@ -61,9 +61,21 @@ await run(["--use-angle=metal"], async (page) => {
   check("unfinished state shows toast", await page.$eval(".toast", (e) => e.classList.contains("is-on")));
   await page.screenshot({ path: path.join(out, "flow_toast.jpg"), type: "jpeg", quality: 82 });
 
-  await page.goto(`${base}/work`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/play`, { waitUntil: "networkidle" });
   await page.waitForTimeout(400);
   check("deep link to unfinished state redirects", page.url().endsWith("/now"), page.url());
+
+  for (const r of ["agent", "social", "games", "brand", "gov", "cats/shaojiu", "window", "me"]) {
+    await page.goto(`${base}/work/${r}`, { waitUntil: "networkidle" });
+    await page.waitForSelector(".app.is-ready");
+    const sheet = await page.waitForSelector(".sheet", { timeout: 4000 }).then((e) => e.innerText(), () => "");
+    check(`work deep link /work/${r}`, sheet.trim().length > 20 && page.url().endsWith(`/work/${r}`), sheet.slice(0, 24).replace(/\s+/g, " "));
+  }
+  await page.goto(`${base}/work/gov`, { waitUntil: "networkidle" });
+  await page.click(".work-chain >> text=游戏");
+  await page.waitForTimeout(500);
+  check("career chain steps to the next stop", page.url().endsWith("/work/games") && !!(await page.$(".work-chain .is-on >> text=游戏")), page.url());
+  await page.screenshot({ path: path.join(out, "flow_work_panel.jpg"), type: "jpeg", quality: 82 });
 
   for (const r of ["project", "thought", "cats/xiaoba", "cats/shaojiu", "window", "me"]) {
     await page.goto(`${base}/now/${r}`, { waitUntil: "networkidle" });
@@ -93,7 +105,7 @@ await run(["--use-angle=metal"], async (page) => {
 });
 
 await run(["--disable-webgl", "--disable-webgl2", "--disable-gpu"], async (page) => {
-  for (const scene of ["now", "create"]) {
+  for (const scene of ["now", "create", "work"]) {
     await page.goto(`${base}/${scene}`, { waitUntil: "networkidle" });
     const ready = await page.waitForSelector(".app.is-ready", { timeout: 10000 }).then(() => true, () => false);
     check(`no-WebGL fallback becomes ready (${scene})`, ready);

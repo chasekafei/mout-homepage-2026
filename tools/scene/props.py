@@ -162,7 +162,7 @@ def build_all():
     chair = build_chair()
     C.build_character(chair)
     C.build_shaojiu(desk_root, (-0.7, 0.26, DESK_TOP), 22)
-    C.build_xiaoba(desk_root, (0.45, 0.56, DESK_TOP), 14)
+    C.build_xiaoba(desk_root, (0.8, 0.6, DESK_TOP), 30)
     build_rug()
     build_left_shelf()
     build_bench()

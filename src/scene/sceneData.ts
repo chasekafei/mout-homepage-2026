@@ -10,8 +10,8 @@ export const SCENE = {
   /** Teal waveform beside the microphone head, in image uv (scenes with a microphone only). */
   wave: {
     create: {
-      desktop: { x0: 0.624, x1: 0.684, y: 0.452, h: 0.05 },
-      mobile: { x0: 0.69, x1: 0.765, y: 0.468, h: 0.026 },
+      desktop: { x0: 0.584, x1: 0.644, y: 0.488, h: 0.05 },
+      mobile: { x0: 0.608, x1: 0.683, y: 0.471, h: 0.026 },
     },
   } as Partial<Record<SceneId, Record<Variant, { x0: number; x1: number; y: number; h: number }>>>,
 };

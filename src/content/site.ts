@@ -4,14 +4,15 @@ export const STATES: { id: StateId; label: string; ready: boolean; teaser: strin
   { id: "now", label: "此刻", ready: true, teaser: "" },
   { id: "create", label: "创作", ready: true, teaser: "" },
   { id: "play", label: "游戏", ready: false, teaser: "游戏场景还在搭：GBA 婚礼请柬小游戏、FC 与 MD 的童年电视，以及一千多款游戏的存档架。" },
-  { id: "work", label: "工作", ready: false, teaser: "工作场景还在搭：AI Agent 空间助手居中，社交、游戏、品牌营销和电子政务的经历围在它身后。" },
+  { id: "work", label: "工作", ready: true, teaser: "" },
   { id: "depart", label: "出发", ready: false, teaser: "出发场景还在搭：同一个座位，车窗外换成新疆、巴统、福冈或多哈。" },
   { id: "chat", label: "和我聊聊", ready: true, teaser: "" },
 ];
 
 export type HotspotId =
   | "writing" | "podcast" | "products" | "rubik" | "cat_shaojiu" | "cat_xiaoba" | "me" | "books" | "window"
-  | "project" | "thought";
+  | "project" | "thought"
+  | "agent" | "social" | "games" | "brand" | "gov";
 
 export type Hotspot = { id: HotspotId; route: string; label: string; hint: string; kind: string };
 
@@ -38,8 +39,21 @@ export const NOW_HOTSPOTS: Hotspot[] = [
   { id: "window", route: "window", kind: "OUTSIDE", label: "窗外的街", hint: "远程工作之后，换个地方坐坐也算出发。" },
 ];
 
+/** Order matches tools/scene/scene_work.py. */
+export const WORK_HOTSPOTS: Hotspot[] = [
+  { id: "agent", route: "agent", kind: "AI AGENT", label: "AI Agent 核心", hint: "正前方这颗方块：Super Intern、fakers 和超参数的那几年。" },
+  { id: "social", route: "social", kind: "SOCIAL", label: "语音房", hint: "荔枝 TIYA 的熟人语音房，和《社思现场》。" },
+  { id: "games", route: "games", kind: "GAMES", label: "游戏关卡", hint: "三年游戏创业：定制小游戏、自研，和互动营销。" },
+  { id: "brand", route: "brand", kind: "BRAND", label: "品牌营销", hint: "省广集团的 H5，和微信全年 campaign 里的 Fendi、迪士尼、长城。" },
+  { id: "gov", route: "gov", kind: "E-GOV", label: "电子政务", hint: "第一份工作：把政务搬上微信和小程序。" },
+  { id: "me", route: "me", kind: "MOUT.ME", label: "MouT.me", hint: "一根线从最上面的政务大楼接下来，一直接到正前方的 Agent。" },
+  { id: "cat_shaojiu", route: "cats/shaojiu", kind: "CAT", label: "烧酒", hint: "狸花猫，睡在台灯底下最暖的那一块。" },
+  { id: "cat_xiaoba", route: "cats/xiaoba", kind: "CAT", label: "小八", hint: "英短蓝白，在窗台上看夜景。" },
+  { id: "window", route: "window", kind: "OUTSIDE", label: "窗外", hint: "远程工作的那几年，大部分时间是在这扇窗前度过的。" },
+];
+
 /** States that have their own 3D room. Every room shares the character, seat and camera. */
-export type SceneId = "now" | "create";
+export type SceneId = "now" | "create" | "work";
 
 export type SceneDef = {
   id: SceneId;
@@ -54,6 +68,7 @@ export type SceneDef = {
 export const SCENES: Record<SceneId, SceneDef> = {
   now: { id: "now", label: "此刻", hotspots: NOW_HOTSPOTS, caption: "最近在做的、在想的，和两只猫今天的样子。{act}", flat: true },
   create: { id: "create", label: "创作", hotspots: HOTSPOTS, caption: "写作、播客和独立产品。{act}", flat: true },
+  work: { id: "work", label: "工作", hotspots: WORK_HOTSPOTS, caption: "做过的每一个行业，都接进了现在的 AI Agent。{act}", flat: true },
 };
 
 export const isScene = (s: string): s is SceneId => s in SCENES;
@@ -64,12 +79,12 @@ export const hotspotByRoute = (scene: SceneId, r: string) =>
 export const NOW = {
   project: {
     name: "MouT.me",
-    status: "正在搭第二个场景",
+    status: "三个场景已经搭好",
     oneLine: "一个可以坐进去的个人网站：同一个我、同一个座位，导航换的是房间。",
     notes: [
       "房间在 Blender 里程序化建模，Cycles 把光照烘焙进贴图，浏览器里用 three.js 实时渲染。",
       "每个场景只换环境、灯光和物件，角色的坐姿和镜头永远不变，切换时只有房间在变。",
-      "目前完成了「创作」和「此刻」，接下来是「工作」「游戏」和「出发」。",
+      "目前完成了「此刻」「创作」和「工作」，接下来是「游戏」和「出发」。",
     ],
   },
   thought: {
@@ -80,6 +95,87 @@ export const NOW = {
     ],
   },
 };
+
+export type WorkId = "gov" | "brand" | "games" | "social" | "agent";
+
+export type WorkStop = {
+  id: WorkId;
+  name: string;
+  where: string;
+  role: string;
+  oneLine: string;
+  items: { t: string; d: string }[];
+  /** What this stop handed to the next one. */
+  carry: string;
+};
+
+/** Oldest first: the order the cable runs through the modules into the Agent. */
+export const WORK: WorkStop[] = [
+  {
+    id: "gov",
+    name: "电子政务",
+    where: "中山 → 广州的创业公司",
+    role: "设计、前端，后来是项目经理和售前",
+    oneLine: "第一份工作。政府软件还是死板的桌面客户端，我们往里面嵌网页，再把整套政务搬上微信。",
+    items: [
+      { t: "身兼数职", d: "白天跟老板见客户、讲方案，晚上回去改 PPT，连夜用设计和前端赶出能演示的 demo。" },
+      { t: "海珠区政务微信", d: "给广州海珠区政务办做了一套微信上的政务系统，后来又做了小程序，让市民在手机上办事。" },
+      { t: "一次采访", d: "因为这套模式，作为代表接受了《南方日报》关于微信政务生态的采访。" },
+    ],
+    carry: "学会了先听懂客户要什么，再决定做什么、怎么讲。",
+  },
+  {
+    id: "brand",
+    name: "品牌营销",
+    where: "省广集团 → 子公司创业",
+    role: "技术开发 → 业务 coordinator → 产品经理",
+    oneLine: "趁着 HTML5 高速发展，用 H5 和小游戏做那些会被转发到群里和朋友圈的营销玩法。",
+    items: [
+      { t: "打通各岗位", d: "设计、开发、项目都做过，创意会上能当场评估方案的可行性和成本，内部竞选成了业务 coordinator。" },
+      { t: "产品化", d: "跟着老板出来创业，把定制项目里的共性抽成一个 to B 的 SaaS 平台，开始做产品经理。" },
+    ],
+    carry: "从执行走进了创意策划，也第一次把项目抽象成产品。",
+  },
+  {
+    id: "games",
+    name: "游戏",
+    where: "和两位前同事合伙创业，三年",
+    role: "合伙人、游戏策划，忙起来也自己做",
+    oneLine: "从小玩到大的东西，终于变成了工作：定制小游戏、自研游戏，和游戏化互动营销。",
+    items: [
+      { t: "定制小游戏", d: "第一年给缺内容的小游戏平台快速定制，同时开发很多款。" },
+      { t: "微信全年 campaign", d: "拿下微信年度品牌营销里的小游戏章节，十几版整合方案后落地：Fendi 罗马大秀预热的跑酷、迪士尼《玩具总动员 4》、中国长城的烧砖小游戏。" },
+      { t: "之后", d: "QQ 的贝多芬诞辰文创项目、萧邦的游戏化项目。后来资金压力太大，公司停了。" },
+    ],
+    carry: "几十款小游戏的经验，成了进入社交团队的敲门砖。",
+  },
+  {
+    id: "social",
+    name: "社交",
+    where: "荔枝 · TIYA",
+    role: "产品经理",
+    oneLine: "面向美国青少年游戏玩家的熟人语音房：一起开黑，玩完接着聊。",
+    items: [
+      { t: "语音房小游戏", d: "从房间内互动游戏的策划做起，帮团队理解游戏开发和 App 开发的不同。" },
+      { t: "Figma 原型", d: "大家还在用 Axure 的时候，我拿出了带交互和动效的 Figma 原型。" },
+      { t: "《社思现场》", d: "为了补齐社交行业认知，每周整理熟人社交产品的动态，先在公司内部发，后来公开成 Newsletter。" },
+    ],
+    carry: "ChatGPT 出来之前，我在内部创业比赛里提了一个 AI 社交项目。",
+  },
+  {
+    id: "agent",
+    name: "AI Agent",
+    where: "超参数 → 英国团队",
+    role: "产品经理",
+    oneLine: "从 AI 拍照社交、AI 主播，一路做到能调用几百个工具的通用 Agent。",
+    items: [
+      { t: "超参数", d: "起司 AI 拍照社交；读 B 站弹幕、会主动怼人的 AI 主播，做到过 B 站 AI 主播前三；还有 AI 陪玩。" },
+      { t: "fakers", d: "AI 资讯社区：每个 AI 博主有自己的人格和关注方向，替你从信息洪流里筛出可靠的内容。" },
+      { t: "Super Intern", d: "住在 Discord、Telegram 里的通用 Agent：搜索、文档、生图、邮件、数据库、日程，用自然语言写成 Skill，再上架到 Skill Marketplace。" },
+    ],
+    carry: "做 AI 产品最重要的，是让用户更主动、更完整地交出他的 context。",
+  },
+];
 
 export type Product = {
   id: string;
@@ -143,13 +239,13 @@ export const CATS = {
   shaojiu: {
     name: "烧酒",
     breed: "狸花猫",
-    spot: { create: "桌子左角", now: "窗台" },
+    spot: { create: "桌子左角", now: "窗台", work: "台灯底下" },
     lines: ["深棕色虎斑，白下巴、白爪子。", "在创作场景里，它卷成一团睡在桌子的左角；在咖啡馆里，它占了窗台上最晒的那一块。"],
   },
   xiaoba: {
     name: "小八",
     breed: "英短蓝白",
-    spot: { create: "麦克风旁边", now: "笔记本旁边" },
+    spot: { create: "麦克风旁边", now: "笔记本旁边", work: "窗台" },
     lines: ["蓝灰色的背，白色的胸口和爪子。", "在创作场景里，它摊开躺在麦克风旁边，正好压着一块阳光；在咖啡馆里，它直接占了笔记本旁边的半张桌子。"],
   },
 } as const;

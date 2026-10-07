@@ -29,10 +29,30 @@ def _union(*sdfs):
 
 HEAD_SCALE = 1.1
 TORSO_LEAN = -17.0             # negative X rotation tips the top toward +Y (forward)
-HEAD_ROT = (-14.0, 0.0, -50.0)  # look down, yaw toward his right (camera right)
+HEAD_ROT = (-14.0, 0.0, -4.0)  # look down, straight ahead
 
 
-def build_character(parent):
+# Arm poses per scene, chair space: side -> (elbow, wrist, hand tip, hand size at wrist, at tip, hand up axis, thumb).
+# Head, torso and seat never change between scenes; only what the hands are doing does.
+ARMS = {
+    # right fist propping the chin, left hand resting flat on the desk / keyboard
+    "chin": {
+        "r": ((0.21, 0.47, 0.8), (0.1, 0.38, 0.85), (0.055, 0.335, 0.945), (0.068, 0.05), (0.07, 0.056), (1, 0, 0),
+              None),
+        "l": ((-0.25, 0.3, 0.8), (-0.08, 0.45, 0.795), (0.025, 0.52, 0.79), (0.08, 0.03), (0.088, 0.026), (0, 0, 1),
+              ((-0.04, 0.47, 0.8), (-0.01, 0.45, 0.79))),
+    },
+    # both hands on a keyboard straight ahead (keys at chair y ~0.5, z ~0.785)
+    "type": {
+        "r": ((0.25, 0.3, 0.8), (0.13, 0.46, 0.8), (0.085, 0.54, 0.79), (0.08, 0.03), (0.086, 0.026), (0, 0, 1),
+              ((0.09, 0.47, 0.8), (0.06, 0.5, 0.792))),
+        "l": ((-0.25, 0.3, 0.8), (-0.13, 0.46, 0.8), (-0.085, 0.54, 0.79), (0.08, 0.03), (0.086, 0.026), (0, 0, 1),
+              ((-0.09, 0.47, 0.8), (-0.06, 0.5, 0.792))),
+    },
+}
+
+
+def build_character(parent, arms="chin"):
     """Seated character. ``parent`` is the chair-space empty (origin at the seat centre, facing +Y)."""
     B.use_collection("character")
     root = B.empty("me_root", (0, 0, 0), (0, 0, 0), parent=parent, hs="me")
@@ -142,12 +162,11 @@ def build_character(parent):
     # ---- arms + hands (hard surface) -----------------------------------------
     skin = B.mat("me_skin", SKIN, 0.55, spec=0.4)
     sh_r, sh_l = T((0.205, 0.0, 0.44)), T((-0.205, 0.0, 0.44))
-    elbow_r, wrist_r = (0.21, 0.47, 0.8), (0.1, 0.38, 0.85)
-    elbow_l, wrist_l = (-0.25, 0.43, 0.8), (-0.07, 0.6, 0.795)
     for side, sh in (("r", sh_r), ("l", sh_l)):
         B.superellipsoid(f"me_shoulder_{side}", (0.13, 0.15, 0.12), sh, (TORSO_LEAN, 0, 0), material=cloth, e=0.55,
                          parent=root)
-    for side, sh, el, wr in (("r", sh_r, elbow_r, wrist_r), ("l", sh_l, elbow_l, wrist_l)):
+    for side, (el, wr, tip, w0, w1, up, thumb) in ARMS[arms].items():
+        sh = sh_r if side == "r" else sh_l
         B.tbox(f"me_upper_{side}", sh, el, (0.12, 0.12), (0.1, 0.1), up=(0, 0, 1), material=cloth, bevel=0.025,
                parent=root)
         B.superellipsoid(f"me_elbow_{side}", (0.105, 0.105, 0.1), el, material=cloth, e=0.6, parent=root)
@@ -156,13 +175,10 @@ def build_character(parent):
                bevel=0.03, parent=root)
         B.tbox(f"me_cuff_{side}", cuff, wr, (0.09, 0.086), (0.086, 0.082), up=(0, 0, 1), material=cloth_d,
                bevel=0.025, parent=root)
-    # right fist propping the chin, left hand resting flat on the desk
-    B.tbox("me_hand_r", wrist_r, (0.055, 0.335, 0.945), (0.068, 0.05), (0.07, 0.056), up=(1, 0, 0), material=skin,
-           bevel=0.018, parent=root)
-    B.tbox("me_hand_l", wrist_l, (0.035, 0.67, 0.79), (0.08, 0.03), (0.088, 0.026), up=(0, 0, 1), material=skin,
-           bevel=0.01, parent=root)
-    B.tbox("me_thumb_l", (-0.03, 0.62, 0.8), (0.0, 0.6, 0.79), (0.024, 0.022), up=(0, 0, 1), material=skin,
-           bevel=0.008, parent=root)
+        B.tbox(f"me_hand_{side}", wr, tip, w0, w1, up=up, material=skin, bevel=0.018 if up[0] else 0.01, parent=root)
+        if thumb:
+            B.tbox(f"me_thumb_{side}", thumb[0], thumb[1], (0.024, 0.022), up=(0, 0, 1), material=skin, bevel=0.008,
+                   parent=root)
 
     # ---- legs (mostly hidden, needed for shadows) -------------------------------
     pants = B.mat("me_pants", PANTS, 0.8, sheen=0.3)

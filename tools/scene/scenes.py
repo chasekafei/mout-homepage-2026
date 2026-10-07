@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import importlib
 
-NAMES = ("now", "create")
+NAMES = ("now", "create", "work")
 
 
 def load(name: str):
