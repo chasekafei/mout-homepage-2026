@@ -388,6 +388,13 @@ a { color: inherit; }
 .work-chain button:hover { background: #fff; }
 .work-chain .is-on button { background: var(--ink); color: #fff; border-color: transparent; box-shadow: 0 0 0 3px #2fc9ab55; }
 
+.play-panel > p:not(.lede):not(.meta) { color: var(--ink-2); }
+.gba-preview { margin: 16px 0; padding: 18px; border-radius: 14px; background: #3d3a8c; display: grid; justify-items: center; gap: 12px; }
+.gba-preview img { width: min(100%, 360px); height: auto; border-radius: 4px; box-shadow: 0 0 0 6px #23214f; }
+.gba-preview figcaption { color: #d8d6f5; margin: 0; }
+.gba-frame { margin: 16px 0; aspect-ratio: 4 / 3; max-height: 70vh; border-radius: 12px; overflow: hidden; background: #111; }
+.gba-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+
 /* index */
 .index-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .index-list a { display: grid; gap: 1px; padding: 10px 12px; border-radius: 10px; background: var(--paper-2); text-decoration: none; }

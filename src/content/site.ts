@@ -3,7 +3,7 @@ export type StateId = "now" | "create" | "play" | "work" | "depart" | "chat";
 export const STATES: { id: StateId; label: string; ready: boolean; teaser: string }[] = [
   { id: "now", label: "此刻", ready: true, teaser: "" },
   { id: "create", label: "创作", ready: true, teaser: "" },
-  { id: "play", label: "游戏", ready: false, teaser: "游戏场景还在搭：GBA 婚礼请柬小游戏、FC 与 MD 的童年电视，以及一千多款游戏的存档架。" },
+  { id: "play", label: "游戏", ready: true, teaser: "" },
   { id: "work", label: "工作", ready: true, teaser: "" },
   { id: "depart", label: "出发", ready: false, teaser: "出发场景还在搭：同一个座位，车窗外换成新疆、巴统、福冈或多哈。" },
   { id: "chat", label: "和我聊聊", ready: true, teaser: "" },
@@ -12,7 +12,8 @@ export const STATES: { id: StateId; label: string; ready: boolean; teaser: strin
 export type HotspotId =
   | "writing" | "podcast" | "products" | "rubik" | "cat_shaojiu" | "cat_xiaoba" | "me" | "books" | "window"
   | "project" | "thought"
-  | "agent" | "social" | "games" | "brand" | "gov";
+  | "agent" | "social" | "games" | "brand" | "gov"
+  | "tv" | "gba" | "archive" | "handhelds" | "arcade";
 
 export type Hotspot = { id: HotspotId; route: string; label: string; hint: string; kind: string };
 
@@ -52,8 +53,21 @@ export const WORK_HOTSPOTS: Hotspot[] = [
   { id: "window", route: "window", kind: "OUTSIDE", label: "窗外", hint: "远程工作的那几年，大部分时间是在这扇窗前度过的。" },
 ];
 
+/** Order matches tools/scene/scene_play.py. */
+export const PLAY_HOTSPOTS: Hotspot[] = [
+  { id: "tv", route: "tv", kind: "FC · MD", label: "显像管电视", hint: "放学后，四五六个同学围在我家很小的电视前轮流玩。" },
+  { id: "gba", route: "gba", kind: "PLAYABLE", label: "茶几上的 GBA", hint: "我结婚时做的像素请柬小游戏，点 GBA 的按键走动和对话。" },
+  { id: "archive", route: "archive", kind: "ARCHIVE", label: "存档架", hint: "Steam 上一千多款，大部分没玩完。架子一直延伸到天花板。" },
+  { id: "handhelds", route: "handhelds", kind: "HANDHELDS", label: "掌机架", hint: "电视上方这一排掌机，和柜子里的 Switch、PS4。" },
+  { id: "arcade", route: "arcade", kind: "ARCADE", label: "街机", hint: "3 岁那年，爸爸和舅舅去游戏厅时会带上我。" },
+  { id: "me", route: "me", kind: "MOUT.ME", label: "MouT.me", hint: "玩得太早、太多，最后反而更想知道游戏为什么这样设计。" },
+  { id: "cat_shaojiu", route: "cats/shaojiu", kind: "CAT", label: "烧酒", hint: "狸花猫，趴在显像管电视顶上，那里最暖和。" },
+  { id: "cat_xiaoba", route: "cats/xiaoba", kind: "CAT", label: "小八", hint: "英短蓝白，躺在茶几上，离手柄线很近。" },
+  { id: "window", route: "window", kind: "OUTSIDE", label: "窗外", hint: "傍晚的太阳快落山了，玩到吃饭前大家再各自回家。" },
+];
+
 /** States that have their own 3D room. Every room shares the character, seat and camera. */
-export type SceneId = "now" | "create" | "work";
+export type SceneId = "now" | "create" | "work" | "play";
 
 export type SceneDef = {
   id: SceneId;
@@ -69,6 +83,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
   now: { id: "now", label: "此刻", hotspots: NOW_HOTSPOTS, caption: "最近在做的、在想的，和两只猫今天的样子。{act}", flat: true },
   create: { id: "create", label: "创作", hotspots: HOTSPOTS, caption: "写作、播客和独立产品。{act}", flat: true },
   work: { id: "work", label: "工作", hotspots: WORK_HOTSPOTS, caption: "做过的每一个行业，都接进了现在的 AI Agent。{act}", flat: true },
+  play: { id: "play", label: "游戏", hotspots: PLAY_HOTSPOTS, caption: "从 3 岁的游戏厅，到一面放不下的存档架。{act}", flat: true },
 };
 
 export const isScene = (s: string): s is SceneId => s in SCENES;
@@ -79,12 +94,12 @@ export const hotspotByRoute = (scene: SceneId, r: string) =>
 export const NOW = {
   project: {
     name: "MouT.me",
-    status: "三个场景已经搭好",
+    status: "四个场景已经搭好",
     oneLine: "一个可以坐进去的个人网站：同一个我、同一个座位，导航换的是房间。",
     notes: [
       "房间在 Blender 里程序化建模，Cycles 把光照烘焙进贴图，浏览器里用 three.js 实时渲染。",
       "每个场景只换环境、灯光和物件，角色的坐姿和镜头永远不变，切换时只有房间在变。",
-      "目前完成了「此刻」「创作」和「工作」，接下来是「游戏」和「出发」。",
+      "目前完成了「此刻」「创作」「工作」和「游戏」，接下来是「出发」。",
     ],
   },
   thought: {
@@ -177,6 +192,50 @@ export const WORK: WorkStop[] = [
   },
 ];
 
+export type PlayId = "tv" | "gba" | "archive" | "handhelds" | "arcade";
+
+/** The wedding game: set `src` once the Cocos web build is copied to public/games/wedding/. */
+export const WEDDING_GAME: { src: string; preview: string } = { src: "", preview: "/media/play/gba-wedding.png" };
+
+export const PLAY: Record<PlayId, { lede: string; meta: string; body: string[]; next?: { label: string; to: string } }> = {
+  arcade: {
+    lede: "我从 3 岁开始玩游戏。爸爸和舅舅都爱玩，他们去游戏厅的时候会带着我一起去。",
+    meta: "游戏厅 · 3 岁",
+    body: ["那时候我还不怎么会玩，但已经站在机台前面了。角落这台街机，留给那段最早的记忆。"],
+  },
+  tv: {
+    lede: "家里很早就有了任天堂的 FC，后来又有了世嘉的 MD。爸爸没有禁止我玩游戏，而是带着我一起玩。",
+    meta: "FC · MD · 小学四到六年级",
+    body: [
+      "那几年基本只有我家有游戏机。每天放学，同学们走十几二十分钟到我家，四五六个人围在很小的电视机前轮流玩，玩到吃饭前再各自回家。",
+      "我一般会先写完作业再玩。也许是玩得太早、太杂，我反而很难沉迷某一款游戏，更想知道它是从哪里发展来的、为什么要这样设计。",
+    ],
+    next: { label: "后来游戏变成了工作", to: "/work/games" },
+  },
+  gba: {
+    lede: "我结婚的时候，没有用常见的 H5 请柬，而是用游戏引擎做了一个像素风的小游戏。",
+    meta: "婚礼请柬 · Cocos",
+    body: [
+      "你作为宾客走进婚礼现场，可以和我、我老婆，还有我家的猫对话。我和老婆藏了几句给宾客的话，猫会告诉你婚礼的时间和地点。",
+      "整个界面是一台 GBA：屏幕里是游戏，点壳子上的方向键和 A、B 键走动、对话。当时 bug 不少，但收到了很多好评。",
+    ],
+  },
+  archive: {
+    lede: "工作后的头两三年，我买 Steam 游戏买得很疯狂，账号里有一千多款，都是自己买的。",
+    meta: "Steam 1000+ · 大部分没玩完",
+    body: [
+      "那段时间我对市面上的新游戏几乎了如指掌。后来时间越来越少，换了 Mac 以后很多游戏也玩不了，现在对游戏有点滞后，我自己觉得挺可惜。",
+      "这面架子按平台排好，一直延伸到天花板。以后它会对应我真实的游戏库，一个盒子就是一款游戏。",
+    ],
+    next: { label: "做游戏的那三年", to: "/work/games" },
+  },
+  handhelds: {
+    lede: "主机和掌机攒了不少。Switch 和 PS4 一直都在，PS5 和 Switch 2 没买，因为知道买了也没时间玩。",
+    meta: "PSP · PSV · Switch · PS4",
+    body: ["电视上方这一排掌机，和电视柜里的主机，以后会换成我手上真实的那几台。"],
+  },
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -239,13 +298,13 @@ export const CATS = {
   shaojiu: {
     name: "烧酒",
     breed: "狸花猫",
-    spot: { create: "桌子左角", now: "窗台", work: "台灯底下" },
+    spot: { create: "桌子左角", now: "窗台", work: "台灯底下", play: "显像管电视顶上" },
     lines: ["深棕色虎斑，白下巴、白爪子。", "在创作场景里，它卷成一团睡在桌子的左角；在咖啡馆里，它占了窗台上最晒的那一块。"],
   },
   xiaoba: {
     name: "小八",
     breed: "英短蓝白",
-    spot: { create: "麦克风旁边", now: "笔记本旁边", work: "窗台" },
+    spot: { create: "麦克风旁边", now: "笔记本旁边", work: "窗台", play: "茶几上" },
     lines: ["蓝灰色的背，白色的胸口和爪子。", "在创作场景里，它摊开躺在麦克风旁边，正好压着一块阳光；在咖啡馆里，它直接占了笔记本旁边的半张桌子。"],
   },
 } as const;

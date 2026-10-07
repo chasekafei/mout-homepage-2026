@@ -56,12 +56,12 @@ await run(["--use-angle=metal"], async (page) => {
   check("Enter opens the focused object", /\/create\/\w+/.test(page.url()), page.url());
   await page.keyboard.press("Escape");
 
-  await page.click("text=游戏");
+  await page.click("text=出发");
   await page.waitForTimeout(300);
   check("unfinished state shows toast", await page.$eval(".toast", (e) => e.classList.contains("is-on")));
   await page.screenshot({ path: path.join(out, "flow_toast.jpg"), type: "jpeg", quality: 82 });
 
-  await page.goto(`${base}/play`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/depart`, { waitUntil: "networkidle" });
   await page.waitForTimeout(400);
   check("deep link to unfinished state redirects", page.url().endsWith("/now"), page.url());
 
@@ -76,6 +76,18 @@ await run(["--use-angle=metal"], async (page) => {
   await page.waitForTimeout(500);
   check("career chain steps to the next stop", page.url().endsWith("/work/games") && !!(await page.$(".work-chain .is-on >> text=游戏")), page.url());
   await page.screenshot({ path: path.join(out, "flow_work_panel.jpg"), type: "jpeg", quality: 82 });
+
+  for (const r of ["tv", "gba", "archive", "handhelds", "arcade", "cats/shaojiu", "cats/xiaoba", "window", "me"]) {
+    await page.goto(`${base}/play/${r}`, { waitUntil: "networkidle" });
+    await page.waitForSelector(".app.is-ready");
+    const sheet = await page.waitForSelector(".sheet", { timeout: 4000 }).then((e) => e.innerText(), () => "");
+    check(`play deep link /play/${r}`, sheet.trim().length > 20 && page.url().endsWith(`/play/${r}`), sheet.slice(0, 24).replace(/\s+/g, " "));
+  }
+  await page.goto(`${base}/play/tv`, { waitUntil: "networkidle" });
+  await page.click(".sheet >> text=后来游戏变成了工作");
+  await page.waitForTimeout(2800);
+  check("TV panel leads into the games stop at work", page.url().endsWith("/work/games"), page.url());
+  await page.screenshot({ path: path.join(out, "flow_play_to_work.jpg"), type: "jpeg", quality: 82 });
 
   for (const r of ["project", "thought", "cats/xiaoba", "cats/shaojiu", "window", "me"]) {
     await page.goto(`${base}/now/${r}`, { waitUntil: "networkidle" });
@@ -105,7 +117,7 @@ await run(["--use-angle=metal"], async (page) => {
 });
 
 await run(["--disable-webgl", "--disable-webgl2", "--disable-gpu"], async (page) => {
-  for (const scene of ["now", "create", "work"]) {
+  for (const scene of ["now", "create", "work", "play"]) {
     await page.goto(`${base}/${scene}`, { waitUntil: "networkidle" });
     const ready = await page.waitForSelector(".app.is-ready", { timeout: 10000 }).then(() => true, () => false);
     check(`no-WebGL fallback becomes ready (${scene})`, ready);

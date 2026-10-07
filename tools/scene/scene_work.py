@@ -36,7 +36,7 @@ BACKDROP = {
 def build():
     study.build_all()
     nightcity.build()
-    nightcity.build_world()
+    nightcity.build_world("night")
     study.build_lights()
 
 

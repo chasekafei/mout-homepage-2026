@@ -17,7 +17,15 @@ import stage
 from blib import srgb
 from exterior import Batch
 
-GROUND = -11.0           # the study is on the fourth floor
+STYLES = {
+    # the study on the fourth floor, late at night
+    "night": {"ground": -11.0, "lit_from": 0.62, "emit": 2.6, "near_h": (5, 10), "far_h": (8, 24), "street": 6.0,
+              "walls": ("#3a4048", "#454b54", "#2f353d", "#4d4a48", "#3f444c"), "ground_col": "#15181d"},
+    # the game room on the third floor of an old estate, just before sunset
+    "dusk": {"ground": -7.5, "lit_from": 0.9, "emit": 1.4, "near_h": (6, 11), "far_h": (12, 30), "street": 0.0,
+             "walls": ("#d8cdb8", "#cbbfa8", "#e2d8c6", "#c9b49a", "#bfb6a8"), "ground_col": "#6d6458"},
+}
+S = STYLES["night"]
 
 
 def desk_to_world(x, y, z=0.0):
@@ -39,7 +47,7 @@ def MOON_DIR():
 
 def facade_mat():
     """Dark facade; a world-space grid of windows, about a third of them lit warm or cool. Roofs stay dark."""
-    key = "night_facade"
+    key = f"facade_{S['lit_from']}"
     if key in B._mats:
         return B._mats[key]
     m = bpy.data.materials.new(key)
@@ -76,10 +84,11 @@ def facade_mat():
     lit.color_ramp.interpolation = "CONSTANT"
     el = lit.color_ramp.elements
     el[0].position, el[0].color = 0.0, (0, 0, 0, 1)
-    el[1].position, el[1].color = 0.62, (*srgb("#ffc98a"), 1)
-    c2 = el.new(0.86)
+    lo = S["lit_from"]
+    el[1].position, el[1].color = lo, (*srgb("#ffc98a"), 1)
+    c2 = el.new(lo + (1 - lo) * 0.63)
     c2.color = (*srgb("#cfe2ff"), 1)
-    c3 = el.new(0.95)
+    c3 = el.new(lo + (1 - lo) * 0.87)
     c3.color = (*srgb("#ffe7c2"), 1)
     nt.links.new(br.outputs["Color"], lit.inputs["Fac"])
     inv = nt.nodes.new("ShaderNodeMath")
@@ -110,7 +119,7 @@ def facade_mat():
         nt.links.new(mask.outputs[0], comb2.inputs[k])
     nt.links.new(comb2.outputs[0], mul.inputs["B"])
     nt.links.new(mul.outputs["Result"], p.inputs["Emission Color"])
-    p.inputs["Emission Strength"].default_value = 2.6
+    p.inputs["Emission Strength"].default_value = S["emit"]
     B._mats[key] = m
     return m
 
@@ -134,10 +143,12 @@ def plain_mat(name, rough=0.8, emit=0.0):
     return m
 
 
-WALLS = [srgb(c) for c in ("#3a4048", "#454b54", "#2f353d", "#4d4a48", "#3f444c")]
-
-
-def build(seed=5):
+def build(seed=5, style="night", sky_disc=None):
+    """``sky_disc`` = (direction, colour, strength, size): the moon at night, the setting sun at dusk."""
+    global S
+    S = STYLES[style]
+    GROUND = S["ground"]
+    WALLS = [srgb(c) for c in S["walls"]]
     B.use_collection("exterior")
     rng = random.Random(seed)
     out, along = outward()
@@ -156,8 +167,8 @@ def build(seed=5):
     # ground and streets
     x0, y0 = at(-5, -400)
     cx, cy = at(400, 0)
-    dark.box(cx - 900, cy - 900, GROUND - 1, cx + 900, cy + 900, GROUND, srgb("#15181d"))
-    for d in (16.0, 70.0, 150.0):
+    dark.box(cx - 900, cy - 900, GROUND - 1, cx + 900, cy + 900, GROUND, srgb(S["ground_col"]))
+    for d in ((16.0, 70.0, 150.0) if S["street"] else ()):
         ax, ay = at(d, -260)
         bx, by = at(d, 260)
         n = int(520 / 9)
@@ -189,7 +200,7 @@ def build(seed=5):
         w, dd = rng.uniform(12, 22), rng.uniform(10, 16)
         if free(x, y, w, dd):
             placed.append((x, y, w, dd))
-            tower(x, y, w, dd, rng.uniform(5, 10))
+            tower(x, y, w, dd, rng.uniform(*S["near_h"]))
     # middle and far bands: taller and denser toward a skyline
     for _ in range(2500):
         if len(placed) >= 240:
@@ -200,20 +211,28 @@ def build(seed=5):
         w, dd = rng.uniform(14, 34), rng.uniform(14, 30)
         if free(x, y, w, dd):
             placed.append((x, y, w, dd))
-            h = rng.uniform(8, 24) * (1 + 2.6 * max(0.0, (d - 150) / 450)) * (2.0 if rng.random() < 0.06 else 1)
+            h = rng.uniform(*S["far_h"]) * (1 + 2.6 * max(0.0, (d - 150) / 450)) * (2.0 if rng.random() < 0.06 else 1)
             tower(x, y, w, dd, h)
     blocks.build()
     dark.build()
     glow.build()
 
-    # moon, low over the skyline on the visible side of the window
-    moon = B.mat_emit("moon", srgb("#f3eedf"), 6.0)
-    p = win + MOON_DIR() * 900
-    B.superellipsoid("moon", (16, 16, 16), tuple(p), (0, 0, 0), material=moon, e=1.0, nu=24, nv=12)
+    dirn, col, strength, size = sky_disc or (MOON_DIR(), "#f3eedf", 6.0, 16)
+    p = win + dirn * 900
+    B.superellipsoid("sky_disc", (size,) * 3, tuple(p), (0, 0, 0), material=B.mat_emit(f"disc_{col}", srgb(col), strength),
+                     e=1.0, nu=24, nv=12).visible_shadow = False
 
 
-def build_world():
-    """Night sky: city glow at the horizon fading to deep navy, a faint star field for camera rays only."""
+SKIES = {
+    # horizon, lower sky, zenith, ambient seen by everything but camera rays, star strength
+    "night": ("#4a4a5c", "#1a2238", "#070a16", "#0d1426", 0.6),
+    "dusk": ("#ffb07a", "#e89a9a", "#5d7fc4", "#7a6c66", 0.0),
+}
+
+
+def build_world(style="night"):
+    """Gradient sky for camera rays (city glow at night, sunset at dusk) and a flat ambient for lighting."""
+    hz_c, mid_c, top_c, amb_c, star = SKIES[style]
     w = bpy.data.worlds.new("world")
     bpy.context.scene.world = w
     w.use_nodes = True
@@ -228,10 +247,10 @@ def build_world():
     nt.links.new(sep.outputs["Z"], gz.inputs["Value"])
     grad = nt.nodes.new("ShaderNodeValToRGB")
     el = grad.color_ramp.elements
-    el[0].position, el[0].color = 0.0, (*srgb("#4a4a5c"), 1)
-    el[1].position, el[1].color = 1.0, (*srgb("#070a16"), 1)
+    el[0].position, el[0].color = 0.0, (*srgb(hz_c), 1)
+    el[1].position, el[1].color = 1.0, (*srgb(top_c), 1)
     mid = el.new(0.22)
-    mid.color = (*srgb("#1a2238"), 1)
+    mid.color = (*srgb(mid_c), 1)
     nt.links.new(gz.outputs[0], grad.inputs["Fac"])
     stars = nt.nodes.new("ShaderNodeTexVoronoi")
     stars.inputs["Scale"].default_value = 260
@@ -239,7 +258,7 @@ def build_world():
     sr = nt.nodes.new("ShaderNodeMapRange")
     sr.inputs["From Min"].default_value = 0.06
     sr.inputs["From Max"].default_value = 0.0
-    sr.inputs["To Max"].default_value = 0.6
+    sr.inputs["To Max"].default_value = star
     nt.links.new(stars.outputs["Distance"], sr.inputs["Value"])
     hz = nt.nodes.new("ShaderNodeMapRange")
     hz.inputs["From Min"].default_value = 0.08
@@ -259,7 +278,7 @@ def build_world():
     amb.name = "amb_sky"
     amb.data_type = "RGBA"
     amb.inputs["Factor"].default_value = 1.0
-    amb.inputs["B"].default_value = (*srgb("#0d1426"), 1)
+    amb.inputs["B"].default_value = (*srgb(amb_c), 1)
     lp = nt.nodes.new("ShaderNodeLightPath")
     pick = nt.nodes.new("ShaderNodeMix")
     pick.data_type = "RGBA"

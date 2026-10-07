@@ -9,6 +9,7 @@ import { PodcastPanel } from "./panels/PodcastPanel";
 import { ProductsPanel } from "./panels/ProductsPanel";
 import { ProjectPanel, ThoughtPanel } from "./panels/NowPanels";
 import { WorkPanel } from "./panels/WorkPanels";
+import { PlayPanel } from "./panels/PlayPanels";
 import { AboutPanel, BooksPanel, CatsPanel, ChatPanel, IndexPanel, LegacyPanel, WindowPanel } from "./panels/MiscPanels";
 
 type View = { key: string; kind: string; title: string; hotspot: number; side?: "right"; back?: string; wide?: boolean; body: JSX.Element } | null;
@@ -201,6 +202,12 @@ function resolveView(scene: SceneId, state: string, rest: string, go: (to: strin
       const w = WORK.find((x) => x.id === h.id)!;
       return { key: "work", kind: h.kind, title: w.name, hotspot: id, body: <WorkPanel id={w.id} go={go} /> };
     }
+    case "tv":
+    case "gba":
+    case "archive":
+    case "handhelds":
+    case "arcade":
+      return { key: "play", kind: h.kind, title: h.label, hotspot: id, wide: h.id === "gba", body: <PlayPanel id={h.id} go={go} /> };
   }
   return null;
 }
