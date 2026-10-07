@@ -1,0 +1,66 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"> 
+<html lang="en" xml:lang="en" xmlns="http://www.w3.org/1999/xhtml"> 
+ 
+<head> 
+<meta content="text/html; charset=UTF-8" http-equiv="Content-Type" /> 
+<META name=description content="给生活打个草稿……" /> 
+<META name=keywords content="叫我小T,博客,WordPress,微博,PageCookery,Microblog,茶色咖啡,电脑,互联网,IT,数码产品,技术,宅,音乐,游戏,游人,闲谈"> 
+<title>叫我小T - 给生活打个草稿……</title> 
+<link href="style/index.css" rel="stylesheet" /> 
+<style type="text/css"> 
+</style> 
+<script src="about/js/jquery.js" type="text/javascript"></script> 
+<script language="javascript"> 
+		$(document).ready(function() {
+			$("#menu2 li a").wrapInner( '<span class="out"></span>' );
+			$("#menu2 li.nav1 a").hover(function() {
+				$('<span class="over">' + '首页' + '</span>' ).appendTo( this );
+				$("span.urlbox").text("http://xiaotee.com");
+			});
+			$("#menu2 li.nav2 a").hover(function() {
+				$('<span class="over">' + '博客' + '</span>' ).appendTo( this );
+				$("span.urlbox").text("http://blog.xiaotee.com");
+			});
+			$("#menu2 li.nav3 a").hover(function() {
+				$('<span class="over">' + '微博' + '</span>' ).appendTo( this );
+				$("span.urlbox").text("http://talk.xiaotee.com");
+			});
+			$("#menu2 li.nav4 a").hover(function() {
+				$('<span class="over">' + '关于' + '</span>' ).appendTo( this );
+				$("span.urlbox").text("http://about.xiaotee.com");
+			});
+			$("#menu2 li a").hover(function() {
+				$(".out",this).stop(true,true).animate({'bottom':'58px'},300); // 向上滑动 - 隐藏
+				$(".over",this).stop(true,true).animate({'bottom':'0px'},300); // 向上滑动 - 显示
+				$("span.urlbox").stop(true,true).fadeOut(500);
+				$("span.urlbox").stop(true,true).fadeIn(500);
+			}, function() {
+				$(".out",this).stop(true,true).animate({'bottom':'0px'},200); // 向下滑动 - 显示
+				$(".over",this).stop(true,true).animate({'bottom':'-58px'},200); // 向下滑动 - 隐藏
+				$("span.urlbox").stop(true,true).fadeOut(500);
+				$("span.urlbox").stop(false,true).text("叫我小T - 给生活打个草稿……").fadeIn(500);
+			});
+		});
+	</script> 
+</head> 
+ 
+<body> 
+<div id="content">
+	<h1>叫我小T</h1>
+	<div id="menu2" class="menu">
+		<ul>
+			<li class="nav1"><a href="http://xiaotee.com" target="_blank" >Index</a></li>
+			<li class="nav2"><a href="http://blog.xiaotee.com" target="_blank" >Blog</a></li>
+			<li class="nav3"><a href="http://talk.xiaotee.com" target="_blank" >Talk</a></li>
+			<li class="nav4"><a href="http://about.xiaotee.com" target="_blank" >About</a></li>
+		</ul>
+		<div class="clear"></div>
+		<p><span class="urlbox">叫我小T - 给生活打个草稿……</span></p>
+	</div>
+</div>
+ 
+
+ 
+</body> 
+ 
+</html> 

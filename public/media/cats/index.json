@@ -1,0 +1,86 @@
+[
+ {
+  "cat": "xiaoba",
+  "src": "/media/cats/xiaoba-1.webp",
+  "thumb": "/media/cats/xiaoba-1-thumb.webp",
+  "w": 1280,
+  "h": 960
+ },
+ {
+  "cat": "xiaoba",
+  "src": "/media/cats/xiaoba-2.webp",
+  "thumb": "/media/cats/xiaoba-2-thumb.webp",
+  "w": 960,
+  "h": 1280
+ },
+ {
+  "cat": "xiaoba",
+  "src": "/media/cats/xiaoba-3.webp",
+  "thumb": "/media/cats/xiaoba-3-thumb.webp",
+  "w": 1280,
+  "h": 960
+ },
+ {
+  "cat": "xiaoba",
+  "src": "/media/cats/xiaoba-4.webp",
+  "thumb": "/media/cats/xiaoba-4-thumb.webp",
+  "w": 1280,
+  "h": 960
+ },
+ {
+  "cat": "xiaoba",
+  "src": "/media/cats/xiaoba-5.webp",
+  "thumb": "/media/cats/xiaoba-5-thumb.webp",
+  "w": 1280,
+  "h": 960
+ },
+ {
+  "cat": "xiaoba",
+  "src": "/media/cats/xiaoba-6.webp",
+  "thumb": "/media/cats/xiaoba-6-thumb.webp",
+  "w": 768,
+  "h": 1024
+ },
+ {
+  "cat": "both",
+  "src": "/media/cats/both-1.webp",
+  "thumb": "/media/cats/both-1-thumb.webp",
+  "w": 1287,
+  "h": 1400
+ },
+ {
+  "cat": "shaojiu",
+  "src": "/media/cats/shaojiu-1.webp",
+  "thumb": "/media/cats/shaojiu-1-thumb.webp",
+  "w": 1280,
+  "h": 960
+ },
+ {
+  "cat": "shaojiu",
+  "src": "/media/cats/shaojiu-2.webp",
+  "thumb": "/media/cats/shaojiu-2-thumb.webp",
+  "w": 1280,
+  "h": 853
+ },
+ {
+  "cat": "shaojiu",
+  "src": "/media/cats/shaojiu-3.webp",
+  "thumb": "/media/cats/shaojiu-3-thumb.webp",
+  "w": 960,
+  "h": 1280
+ },
+ {
+  "cat": "shaojiu",
+  "src": "/media/cats/shaojiu-4.webp",
+  "thumb": "/media/cats/shaojiu-4-thumb.webp",
+  "w": 960,
+  "h": 1280
+ },
+ {
+  "cat": "shaojiu",
+  "src": "/media/cats/shaojiu-5.webp",
+  "thumb": "/media/cats/shaojiu-5-thumb.webp",
+  "w": 768,
+  "h": 1024
+ }
+]

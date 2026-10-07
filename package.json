@@ -1,0 +1,27 @@
+{
+  "name": "mout-homepage",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "content": "node tools/content/build-content.mjs",
+    "assets": "node tools/content/build-assets.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "marked": "^15.0.0",
+    "playwright-core": "^1.63.0",
+    "sharp": "^0.34.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.4.1"
+  }
+}
