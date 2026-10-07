@@ -1,5 +1,5 @@
 // Realtime room QA: default view, orbit extremes and hover, plus console errors.
-// Usage: node tools/qa/room3d.mjs [baseUrl] [outDir]
+// Usage: [SCENE=now] node tools/qa/room3d.mjs [baseUrl] [outDir]
 import { chromium } from "playwright-core";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -7,6 +7,7 @@ import path from "node:path";
 
 const base = process.argv[2] ?? "http://localhost:5173";
 const out = process.argv[3] ?? ".cache/qa3d";
+const SCENE = process.env.SCENE ?? "create";
 const exe = process.env.CHROME ?? path.join(homedir(), "Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
 const VIEWS = [
   { name: "desktop", width: 1440, height: 900, dpr: 1, mobile: false },
@@ -25,13 +26,13 @@ for (const v of VIEWS) {
   const page = await ctx.newPage();
   page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(`[${v.name}] ${m.text()}`); });
   page.on("pageerror", (e) => errors.push(`[${v.name}] ${e.message}`));
-  await page.goto(base + "/create" + (process.env.QUERY ? "?" + process.env.QUERY : ""), { waitUntil: "networkidle" });
+  await page.goto(`${base}/${SCENE}` + (process.env.QUERY ? "?" + process.env.QUERY : ""), { waitUntil: "networkidle" });
   await page.waitForSelector(".app.is-ready", { timeout: 20000 }).catch(() => errors.push(`[${v.name}] not ready`));
   await page.waitForTimeout(1500);
   const mode = await page.$eval(".stage", (e) => (e.classList.contains("stage-3d") ? "3d" : "2d"));
   console.log(`${v.name}: stage ${mode}`);
   const shot = async (n) => {
-    const file = path.join(out, `${v.name}_${n}.jpg`);
+    const file = path.join(out, `${SCENE === "create" ? "" : SCENE + "_"}${v.name}_${n}.jpg`);
     await page.screenshot({ path: file, type: "jpeg", quality: 85 });
     console.log(file);
   };

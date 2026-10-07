@@ -1,4 +1,7 @@
-"""Diagnostic: render the baked room (decoded radiance as emission) through the beauty camera and compositor."""
+"""Diagnostic: render the baked room (decoded radiance as emission) through the beauty camera and compositor.
+
+Usage: Blender -b --factory-startup --python tools/scene/bakecheck.py [-- <scene>]
+"""
 import sys
 from pathlib import Path
 
@@ -6,11 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bpy  # noqa: E402
 import build  # noqa: E402
 
-BAKE = build.ROOT / ".cache/bake"
+SCENE = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv[:-1] else "create"
+BAKE = build.ROOT / ".cache/bake" / SCENE
 K = 0.6
 
-sys.argv = [sys.argv[0], "--", "--mode", "preview", "--cam", "desktop", "--res", "1440", "--samples", "16",
-            "--out", str(build.ROOT / ".cache/qa3d/bakecheck.png")]
+sys.argv = [sys.argv[0], "--", "--scene", SCENE, "--mode", "preview", "--cam", "desktop", "--res", "1440",
+            "--samples", "16", "--out", str(build.ROOT / f".cache/qa3d/bakecheck_{SCENE}.png")]
 args = build.parse()
 build.build(args)
 build.setup_render(args)

@@ -1,7 +1,7 @@
-"""Build and render the MouT.me creation room.
+"""Build and render a MouT.me scene.
 
 Usage (from repo root):
-    Blender -b --factory-startup --python tools/scene/build.py -- \
+    Blender -b --factory-startup --python tools/scene/build.py -- [--scene create|now] \
         --mode preview|final|mask|depth --cam desktop|mobile [--res 1280] [--samples 64] [--out path]
 """
 from __future__ import annotations
@@ -19,14 +19,17 @@ sys.path.insert(0, str(HERE))
 import bpy  # noqa: E402
 
 import blib as B  # noqa: E402
-import room  # noqa: E402
+import scenes  # noqa: E402
+import stage  # noqa: E402
 
 ROOT = HERE.parents[1]
+SCENE = None  # scene module of the current build
 
 
 def parse():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
+    ap.add_argument("--scene", default="create")
     ap.add_argument("--mode", default="preview")
     ap.add_argument("--cam", default="desktop")
     ap.add_argument("--res", type=int, default=1280)
@@ -36,7 +39,7 @@ def parse():
     ap.add_argument("--only", default="")
     ap.add_argument("--campos", default="")
     ap.add_argument("--target", default="")
-    ap.add_argument("--exposure", type=float, default=-0.8)
+    ap.add_argument("--exposure", type=float, default=None, help="override the scene grade")
     return ap.parse_args(argv)
 
 
@@ -73,44 +76,46 @@ def setup_render(args):
     s.render.image_settings.file_format = "PNG"
     s.render.image_settings.color_mode = "RGB"
     s.render.image_settings.color_depth = "8"
+    g = SCENE.GRADE
     vs = s.view_settings
     vs.view_transform = "AgX"
     try:
         vs.look = "AgX - Medium High Contrast"
     except TypeError:
         pass
-    vs.exposure = args.exposure
+    vs.exposure = g["exposure"] if args.exposure is None else args.exposure
     if hasattr(vs, "use_white_balance"):
         vs.use_white_balance = True
-        vs.white_balance_temperature = 7000
-        vs.white_balance_tint = 4
+        vs.white_balance_temperature = g["temperature"]
+        vs.white_balance_tint = g["tint"]
     s.render.film_transparent = False
 
 
-def setup_compositor(bloom=0.45):
-    """Soft bloom on the sunlit highlights plus a gentle warm grade (beauty pass only)."""
+def setup_compositor():
+    """Soft bloom on the highlights plus the scene's colour balance (beauty pass only); mirrored by the web runtime."""
+    g = SCENE.GRADE
     s = bpy.context.scene
     t = bpy.data.node_groups.new("beauty_comp", "CompositorNodeTree")
     t.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
     rl = t.nodes.new("CompositorNodeRLayers")
     gl = t.nodes.new("CompositorNodeGlare")
     for key, val in (("Type", "Bloom"), ("Quality", "High"), ("Threshold", 1.2), ("Smoothness", 0.6),
-                     ("Strength", bloom), ("Size", 0.7), ("Saturation", 1.1)):
+                     ("Strength", g["bloom"]), ("Size", 0.7), ("Saturation", 1.1)):
         try:
             gl.inputs[key].default_value = val
         except Exception as e:  # noqa: BLE001
             print("glare input", key, e)
     try:
-        gl.inputs["Tint"].default_value = (1.0, 0.86, 0.7, 1.0)
+        gl.inputs["Tint"].default_value = (*g["glare_tint"], 1.0)
     except Exception:
         pass
     cb = t.nodes.new("CompositorNodeColorBalance")
     cols = [i for i in cb.inputs if i.type == "RGBA"]
     named = {i.name: i for i in cols}
     if "Gain" in named:
-        named["Gain"].default_value = (1.03, 1.0, 0.95, 1)
+        named["Gain"].default_value = (*g["gain"], 1)
     if "Lift" in named:
-        named["Lift"].default_value = (1.015, 1.0, 0.985, 1)
+        named["Lift"].default_value = (*g["lift"], 1)
     out = t.nodes.new("NodeGroupOutput")
     t.links.new(rl.outputs["Image"], gl.inputs["Image"])
     t.links.new(gl.outputs["Image"], cb.inputs["Image"])
@@ -120,15 +125,14 @@ def setup_compositor(bloom=0.45):
 
 
 def build(args):
+    global SCENE
+    SCENE = scenes.load(args.scene)
     B.reset()
     B.mat_voxel("voxel")
-    room.build_shell()
-    room.build_exterior()
-    room.build_world()
-    room.build_lights()
-    cams = room.build_cameras()
-    import props
-    props.build_all()
+    SCENE.build()
+    cams = stage.build_cameras()
+    # matrix_world is stale until the depsgraph runs; the bake reads it straight away
+    bpy.context.view_layer.update()
     s = bpy.context.scene
     if args.cam == "top":
         c = bpy.data.cameras.new("cam_top")
@@ -146,7 +150,7 @@ def build(args):
         o = bpy.data.objects.new("cam_dbg", c)
         bpy.context.scene.collection.objects.link(o)
         o.location = [float(v) for v in args.campos.split(",")]
-        room.look_at(o, [float(v) for v in args.target.split(",")])
+        stage.look_at(o, [float(v) for v in args.target.split(",")])
         s.camera = o
     return cams
 
@@ -154,9 +158,8 @@ def build(args):
 # ------------------------------------------------------------------ passes
 
 def override_mask():
-    """Flat emission ID render: each hotspot object gets its id colour."""
-    import props
-    ids = props.HOTSPOTS
+    """Flat emission ID render: each hotspot object gets its id colour; the exterior and sky count as the window."""
+    ids = SCENE.HOTSPOTS
     m = bpy.data.materials.new("mask_override")
     m.use_nodes = True
     nt = m.node_tree
@@ -188,7 +191,7 @@ def override_mask():
     for l in list(wnt.links):
         if l.to_node.name == "Background":
             wnt.links.remove(l)
-    wv = (ids.index("window") + 1) * 16 / 255.0
+    wv = (ids.index("window") + 1) * 16 / 255.0 if "window" in ids else 0.0
     wl = wv / 12.92 if wv <= 0.04045 else ((wv + 0.055) / 1.055) ** 2.4
     wnt.nodes["Background"].inputs["Color"].default_value = (wl, 0, 0, 1)
     wnt.nodes["Background"].inputs["Strength"].default_value = 1
@@ -253,7 +256,7 @@ def override_depth(near=0.5, far=14.0):
 def export_anchors(path: Path):
     """Project hotspot centres and bounds to normalised screen coords."""
     from bpy_extras.object_utils import world_to_camera_view
-    import props
+    ids = SCENE.HOTSPOTS
     s = bpy.context.scene
     cam = s.camera
     deps = bpy.context.evaluated_depsgraph_get()
@@ -264,7 +267,7 @@ def export_anchors(path: Path):
         while hs is None and p is not None:
             hs = p.get("hs")
             p = p.parent
-        if hs not in props.HOTSPOTS or o.type != "MESH":
+        if hs not in ids or o.type != "MESH":
             continue
         ev = o.evaluated_get(deps)
         mw = ev.matrix_world
@@ -278,7 +281,7 @@ def export_anchors(path: Path):
             d["max"] = [max(d["max"][0], x), max(d["max"][1], y)]
     for hs, d in data.items():
         d["center"] = [(d["min"][0] + d["max"][0]) / 2, (d["min"][1] + d["max"][1]) / 2]
-    path.write_text(json.dumps({"ids": props.HOTSPOTS, "anchors": data}, indent=1))
+    path.write_text(json.dumps({"ids": ids, "anchors": data}, indent=1))
 
 
 def report_stats(glb):
@@ -315,7 +318,7 @@ def main():
     build(args)
     setup_render(args)
     s = bpy.context.scene
-    out = Path(args.out) if args.out else ROOT / ".cache" / "renders" / f"{args.mode}_{args.cam}.png"
+    out = Path(args.out) if args.out else ROOT / ".cache" / "renders" / args.scene / f"{args.mode}_{args.cam}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     if args.mode in ("preview", "final"):
         setup_compositor()

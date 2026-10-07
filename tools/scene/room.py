@@ -1,4 +1,4 @@
-"""Room shell, exterior neighbourhood, lighting and cameras for the creation room."""
+"""Room shell, exterior neighbourhood and lighting for the creation room."""
 from __future__ import annotations
 
 import math
@@ -9,6 +9,7 @@ from mathutils import Vector
 
 import blib as B
 from blib import srgb
+from stage import look_at
 
 # Room layout (Blender units = metres, Z up, camera looks roughly toward +Y)
 BACK_Y = 5.6
@@ -232,7 +233,7 @@ def build_exterior():
 
 # ---------------------------------------------------------------- world + lights
 
-def build_world(cloud=True):
+def build_world(cloud=True, sun_dir=SUN_DIR, cam_sky_gain=CAM_SKY, amb_sky=AMB_SKY):
     w = bpy.data.worlds.new("world")
     bpy.context.scene.world = w
     w.use_nodes = True
@@ -244,8 +245,8 @@ def build_world(cloud=True):
         if t in types:
             sky.sky_type = t
             break
-    elev = math.asin(SUN_DIR.z)
-    rot = math.atan2(SUN_DIR.x, SUN_DIR.y)
+    elev = math.asin(sun_dir.z)
+    rot = math.atan2(sun_dir.x, sun_dir.y)
     for attr, val in (("sun_elevation", elev), ("sun_rotation", -rot + math.pi), ("sun_disc", False),
                       ("altitude", 40.0), ("air_density", 1.0), ("aerosol_density", 1.0), ("ozone_density", 1.0)):
         if hasattr(sky, attr):
@@ -310,14 +311,14 @@ def build_world(cloud=True):
     gain.blend_type = "MULTIPLY"
     gain.inputs["Factor"].default_value = 1.0
     nt.links.new(cam_sky, gain.inputs["A"])
-    gain.inputs["B"].default_value = (CAM_SKY, CAM_SKY, CAM_SKY, 1)
+    gain.inputs["B"].default_value = (cam_sky_gain, cam_sky_gain, cam_sky_gain, 1)
     amb = nt.nodes.new("ShaderNodeMix")
     amb.name = "amb_sky"
     amb.data_type = "RGBA"
     amb.blend_type = "MULTIPLY"
     amb.inputs["Factor"].default_value = 1.0
     nt.links.new(phys, amb.inputs["A"])
-    amb.inputs["B"].default_value = (AMB_SKY, AMB_SKY, AMB_SKY, 1)
+    amb.inputs["B"].default_value = (amb_sky, amb_sky, amb_sky, 1)
     lp = nt.nodes.new("ShaderNodeLightPath")
     pick = nt.nodes.new("ShaderNodeMix")
     pick.data_type = "RGBA"
@@ -327,11 +328,6 @@ def build_world(cloud=True):
     nt.links.new(pick.outputs["Result"], bg.inputs["Color"])
     bg.inputs["Strength"].default_value = 1.0
     return w
-
-
-def look_at(obj, target):
-    d = Vector(target) - obj.location
-    obj.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
 
 
 def build_lights(sun_strength=26.0):
@@ -368,27 +364,3 @@ def build_lights(sun_strength=26.0):
     B.link(wo)
     wo.location = ((WIN_X0 + WIN_X1) / 2, BACK_Y + WALL_T + 0.02, (WIN_Z0 + CEIL) / 2)
     wo.rotation_euler = (math.radians(90), 0, 0)
-
-
-CAMERAS = [
-    # name, location, yaw (+ = left), pitch (down), lens mm
-    ("cam_desktop", (0.0, 0.0, 1.42), 0.0, 15.8, 20.0),
-    ("cam_mobile", (0.02, -0.15, 1.72), 0.0, 25.0, 19.0),
-]
-
-
-def build_cameras():
-    B.use_collection("cameras")
-    cams = {}
-    for name, loc, yaw, pitch, lens in CAMERAS:
-        c = bpy.data.cameras.new(name)
-        c.lens = lens
-        c.sensor_width = 36
-        c.clip_start = 0.05
-        c.clip_end = 4000
-        o = bpy.data.objects.new(name, c)
-        B.link(o)
-        o.location = loc
-        o.rotation_euler = (math.radians(90 - pitch), 0, math.radians(yaw))
-        cams[name] = o
-    return cams

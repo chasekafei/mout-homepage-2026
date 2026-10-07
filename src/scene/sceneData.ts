@@ -1,17 +1,19 @@
-import { HOTSPOTS } from "../content/site";
+import { SCENES, type SceneId } from "../content/site";
 
 export type Variant = "desktop" | "mobile";
 
 export const SCENE = {
-  base: "/scene/create",
+  base: (id: SceneId) => `/scene/${id}`,
   aspect: { desktop: 16 / 9, mobile: 9 / 16 },
   widths: { desktop: [1280, 1920, 2560], mobile: [720, 1080, 1440] },
   focus: { desktop: [0.47, 0.56], mobile: [0.56, 0.5] } as Record<Variant, [number, number]>,
-  /** Teal waveform beside the microphone head, in image uv. */
+  /** Teal waveform beside the microphone head, in image uv (scenes with a microphone only). */
   wave: {
-    desktop: { x0: 0.624, x1: 0.684, y: 0.452, h: 0.05 },
-    mobile: { x0: 0.69, x1: 0.765, y: 0.468, h: 0.026 },
-  } as Record<Variant, { x0: number; x1: number; y: number; h: number }>,
+    create: {
+      desktop: { x0: 0.624, x1: 0.684, y: 0.452, h: 0.05 },
+      mobile: { x0: 0.69, x1: 0.765, y: 0.468, h: 0.026 },
+    },
+  } as Partial<Record<SceneId, Record<Variant, { x0: number; x1: number; y: number; h: number }>>>,
 };
 
 /** x0..y1 cover every pixel of the id; cx/cy and the b* bounds describe its largest connected blob. */
@@ -34,11 +36,11 @@ export function pickVariant(w: number, h: number): Variant {
   return w / h < 0.9 ? "mobile" : "desktop";
 }
 
-export function beautyUrl(v: Variant, cssW: number, cssH: number, dpr: number) {
+export function beautyUrl(scene: SceneId, v: Variant, cssW: number, cssH: number, dpr: number) {
   const need = Math.max(cssW, cssH * SCENE.aspect[v]) * Math.min(dpr, 2);
   const list = SCENE.widths[v];
   const w = list.find((x) => x >= need * 0.9) ?? list[list.length - 1];
-  return `${SCENE.base}/beauty_${v}_${w}`;
+  return `${SCENE.base(scene)}/beauty_${v}_${w}`;
 }
 
 async function bitmap(url: string) {
@@ -57,13 +59,12 @@ function pixels(bmp: ImageBitmap) {
   return out;
 }
 
-function regions(ids: Uint8Array, w: number, h: number): Region[] {
+function regions(ids: Uint8Array, w: number, h: number, n: number): Region[] {
   const S = 4;
   const gw = Math.floor(w / S), gh = Math.floor(h / S);
   const grid = new Uint8Array(gw * gh);
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) grid[y * gw + x] = ids[(y * S + S / 2) * w + x * S + S / 2];
 
-  const n = HOTSPOTS.length;
   const out: Region[] = Array.from({ length: n }, (_, id) => ({ id, x0: 1, y0: 1, x1: 0, y1: 0, cx: 0.5, cy: 0.5, area: 0, bx0: 0, by0: 0, bx1: 0, by1: 0 }));
   const best = new Array(n).fill(0);
   const seen = new Uint8Array(gw * gh);
@@ -102,18 +103,20 @@ function regions(ids: Uint8Array, w: number, h: number): Region[] {
   return out;
 }
 
-export async function loadPasses(v: Variant) {
-  const [mask, depth] = await Promise.all([bitmap(`${SCENE.base}/mask_${v}.png`), bitmap(`${SCENE.base}/depth_${v}.webp`)]);
+export async function loadPasses(scene: SceneId, v: Variant) {
+  const base = SCENE.base(scene);
+  const n = SCENES[scene].hotspots.length;
+  const [mask, depth] = await Promise.all([bitmap(`${base}/mask_${v}.png`), bitmap(`${base}/depth_${v}.webp`)]);
   const raw = pixels(mask);
   const ids = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
     const id = Math.round(raw[i] / 16) - 1;
-    ids[i] = id >= 0 && id < HOTSPOTS.length ? id : 255;
+    ids[i] = id >= 0 && id < n ? id : 255;
   }
   const lookup: Lookup = {
     width: mask.width, height: mask.height, ids,
     depthW: depth.width, depthH: depth.height, depth: pixels(depth),
-    regions: regions(ids, mask.width, mask.height),
+    regions: regions(ids, mask.width, mask.height, n),
   };
   return { mask, depth, lookup };
 }

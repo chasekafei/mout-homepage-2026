@@ -1,4 +1,7 @@
-"""Diagnostic: render the desktop view with specular and metal removed (what the diffuse bake can reproduce)."""
+"""Diagnostic: render the desktop view with specular and metal removed (what the diffuse bake can reproduce).
+
+Usage: Blender -b --factory-startup --python tools/scene/nospec.py [-- <scene>]
+"""
 import sys
 from pathlib import Path
 
@@ -6,8 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bpy  # noqa: E402
 import build  # noqa: E402
 
-sys.argv = [sys.argv[0], "--", "--mode", "preview", "--cam", "desktop", "--res", "1440", "--samples", "96",
-            "--out", str(build.ROOT / ".cache/qa3d/nospec.png")]
+SCENE = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv[:-1] else "create"
+sys.argv = [sys.argv[0], "--", "--scene", SCENE, "--mode", "preview", "--cam", "desktop", "--res", "1440",
+            "--samples", "96", "--out", str(build.ROOT / f".cache/qa3d/nospec_{SCENE}.png")]
 args = build.parse()
 build.build(args)
 build.setup_render(args)

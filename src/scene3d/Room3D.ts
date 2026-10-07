@@ -1,33 +1,41 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+// must match the gltfpack version in tools/content/build-assets.mjs (three bundles an older decoder)
+import { MeshoptDecoder } from "meshoptimizer/decoder";
 
 export type Variant = "desktop" | "mobile";
 type V3 = [number, number, number];
 type CamMeta = { pos: V3; fwd: V3; up: V3; vfov: number; aspect: number; pivot: number; yaw: number; pitch: number };
 export type Meta = {
+  scene: string;
   atlas: number;
   encodeK: number;
   lut: { n: number; lo: number; hi: number };
+  /** Mirrors the Blender compositor of this scene. */
+  grade: { bloom: number; tint: V3; gain: V3; lift: V3 };
+  /** Heights of the glossy horizontal planes: floor and work surface (glTF Y-up, metres). */
+  planes: [number, number];
+  /** Encoded radiance standing in for the culled ceiling in the plane reflections. */
+  mirrorClear: V3;
   cameras: Record<Variant, CamMeta>;
   hotspots: Record<string, { min: V3; max: V3; anchor: V3 }>;
   ids: string[];
-  mic: V3 | null;
-  backdrop?: { pos: V3; fwd: V3; up: V3; right: V3; hfov: number; aspect: number };
+  markers: Record<string, V3>;
+  backdrop?: { pos: V3; fwd: V3; up: V3; right: V3; hfov: number; aspect: number; dist?: number };
 };
 export type Rect = { x: number; y: number; w: number; h: number };
 
-export const BASE = "/scene/create/3d";
+export const sceneBase = (id: string) => `/scene/${id}/3d`;
 /** Where the design frame is anchored when the viewport crops it (frame uv). */
 const FOCUS: Record<Variant, [number, number]> = { desktop: [0.47, 0.56], mobile: [0.56, 0.5] };
 const BACKDROP_DIST = 40;
 const GLARE_SIZE = 0.7;
 /** Blur levels for the floor reflection (from 1/4 res); the planks are fairly rough. */
 const REFL_LEVELS = 3;
-/** Heights of the glossy horizontal planes: floor planks and the desk top (glTF Y-up, metres). */
-const PLANES: [number, number] = [0, 0.76];
-/** Encoded radiance standing in for the culled ceiling in the floor reflection (~0.3 linear, warm). */
-const MIRROR_CLEAR = new THREE.Color().setRGB(0.6, 0.57, 0.53, THREE.LinearSRGBColorSpace);
+/** Seconds for a scene change; reduced motion gets a short crossfade instead of the block wipe. */
+const FADE = { blocks: 1.1, plain: 0.25 };
+/** GPU-resident rooms (current, outgoing, one preloaded). */
+const RESIDENT = 3;
 const DEG = Math.PI / 180;
 
 const FULLSCREEN_VS = `precision highp float;
@@ -194,6 +202,10 @@ uniform float uTime;
 uniform float uDust;
 uniform float uReveal;
 uniform vec2 uDrift;
+uniform sampler2D uPrev;
+uniform float uFade;
+uniform float uBlocks;
+uniform vec2 uFocus;
 in vec2 vUv;
 out vec4 fragColor;
 
@@ -268,6 +280,23 @@ void main() {
     col += motes(vec2(vUv.x, 1.0 - vUv.y), uView.x / uView.y) * beam * vec3(1.0, 0.93, 0.8) * 0.32 * uDust;
   }
   col += (hash(vUv * uView + fract(uTime)) - 0.5) / 255.0;
+  // Scene change: the outgoing room gives way block by block from the frame edges in toward the
+  // character, who is identical in both rooms and so never visibly changes.
+  if (uFade < 1.0) {
+    vec3 prev = texture(uPrev, vUv).rgb;
+    float k = uFade;
+    if (uBlocks > 0.5) {
+      float cell = max(12.0, uView.y / 30.0);
+      vec2 c = floor(vUv * uView / cell);
+      vec2 cc = (c + 0.5) * cell / uView;
+      float d = length((cc - uFocus) * vec2(uView.x / uView.y, 1.0));
+      float t = (1.0 - smoothstep(0.0, 1.15, d)) * 0.72 + hash(c * 0.37 + 3.1) * 0.28;
+      k = smoothstep(t * 0.78, t * 0.78 + 0.22, uFade);
+      col = mix(prev, col, k) + k * (1.0 - k) * 0.24 * vec3(1.0, 0.96, 0.86);
+    } else {
+      col = mix(prev, col, k);
+    }
+  }
   fragColor = vec4(col * uReveal, 1.0);
 }`;
 
@@ -289,20 +318,39 @@ export type DrawParams = {
   hover: number; hoverAmt: number; open: number; dim: number; time: number; dust: number; reveal: number;
 };
 
+/** One navigable room on the GPU: baked geometry, radiance atlas, window backdrop and display LUT. */
+type Room = {
+  id: string;
+  meta: Meta;
+  scene: THREE.Scene;
+  /** Everything renderable; mirrored about each glossy plane for the reflection passes. */
+  world: THREE.Group;
+  backdrop: THREE.Mesh | null;
+  mats: THREE.RawShaderMaterial[];
+  lut: THREE.Data3DTexture;
+  textures: THREE.Texture[];
+  mirrorClear: THREE.Color;
+};
+
 export class Room3D {
   readonly renderer: THREE.WebGLRenderer;
   readonly camera = new THREE.PerspectiveCamera(50, 1, 0.03, 200);
-  meta!: Meta;
   variant: Variant = "desktop";
-  /** Current and target orbit angles in degrees. */
+  /** Current and target orbit angles in degrees; shared by every room, like the camera itself. */
   readonly orbit = { yaw: 0, pitch: 0, ty: 0, tp: 0, lookX: 0, lookY: 0 };
-  private scene = new THREE.Scene();
-  /** Everything renderable; mirrored about the floor for the reflection pass. */
-  private world = new THREE.Group();
-  private backdrop: THREE.Mesh | null = null;
-  private sceneMats: THREE.RawShaderMaterial[] = [];
+  /** Loaded or loading rooms, least recently shown first. */
+  private rooms = new Map<string, Promise<Room>>();
+  private cur: Room | null = null;
+  private prev: Room | null = null;
+  private wanted = "";
+  private disposed = false;
+  private fade = 1;
+  private fadeDur = FADE.blocks;
+  private blocks = true;
   private main!: THREE.WebGLRenderTarget;
   private ids!: THREE.WebGLRenderTarget;
+  /** The outgoing room's final image while a scene change runs. */
+  private out!: THREE.WebGLRenderTarget;
   private down: THREE.WebGLRenderTarget[] = [];
   private up: THREE.WebGLRenderTarget[] = [];
   /** Per reflecting plane: the mirrored view and its blur chain. */
@@ -336,59 +384,123 @@ export class Room3D {
       uDebugView: { value: Number(new URLSearchParams(location.search).get("debugView") ?? 0) },
       uIds: { value: null }, uLut: { value: null },
       uLutRange: { value: new THREE.Vector3() }, uK: { value: 0.6 }, uBloom: { value: 0.45 },
-      uTint: { value: new THREE.Vector3(1.0, 0.86, 0.7) }, uGain: { value: new THREE.Vector3(1.03, 1.0, 0.95) },
-      uLift: { value: new THREE.Vector3(1.015, 1.0, 0.985) }, uView: { value: new THREE.Vector2() }, uIdTexel: { value: new THREE.Vector2() },
+      uTint: { value: new THREE.Vector3() }, uGain: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() },
+      uView: { value: new THREE.Vector2() }, uIdTexel: { value: new THREE.Vector2() },
       uHover: { value: -1 }, uHoverAmt: { value: 0 }, uOpen: { value: -1 }, uDim: { value: 0 }, uTime: { value: 0 },
       uDust: { value: 1 }, uReveal: { value: 0 }, uDrift: { value: new THREE.Vector2() },
+      uPrev: { value: null }, uFade: { value: 1 }, uBlocks: { value: 1 }, uFocus: { value: new THREE.Vector2(0.5, 0.5) },
     });
     this.quad = new THREE.Mesh(tri, this.final);
     this.quad.frustumCulled = false;
     this.quadScene.add(this.quad);
   }
 
-  async load(onProgress?: (f: number) => void) {
+  /** Metadata of the room on screen (camera, hotspots, markers). */
+  get meta() { return this.cur!.meta; }
+  get current() { return this.cur?.id ?? ""; }
+  get transitioning() { return this.prev !== null; }
+
+  /** Fetch, decode and upload a room without showing it. */
+  preload(id: string) { return this.room(id).then(() => undefined); }
+
+  /**
+   * Put a room on screen; with a room already showing, the change runs as a transition.
+   * Resolves false when a later call superseded this one before its room finished loading.
+   */
+  async show(id: string, opts: { instant?: boolean; still?: boolean } = {}) {
+    this.wanted = id;
+    const room = await this.room(id);
+    if (this.wanted !== id) return false;
+    const p = this.rooms.get(id)!;
+    this.rooms.delete(id);
+    this.rooms.set(id, p);
+    if (this.cur === room) return true;
+    if (!this.cur || opts.instant) {
+      this.prev = null;
+      this.fade = 1;
+    } else {
+      this.prev = this.cur;
+      this.fade = 0;
+      this.blocks = !opts.still;
+      this.fadeDur = opts.still ? FADE.plain : FADE.blocks;
+    }
+    this.cur = room;
+    this.evict();
+    this.updateCamera();
+    return true;
+  }
+
+  private room(id: string) {
+    let p = this.rooms.get(id);
+    if (!p) {
+      p = this.build(id);
+      this.rooms.set(id, p);
+      p.catch(() => this.rooms.delete(id));
+    }
+    return p;
+  }
+
+  private evict() {
+    const keep = new Set([this.cur?.id, this.prev?.id]);
+    for (const id of [...this.rooms.keys()]) {
+      if (this.rooms.size <= RESIDENT) break;
+      if (keep.has(id)) continue;
+      const p = this.rooms.get(id)!;
+      this.rooms.delete(id);
+      p.then((r) => this.free(r), () => {});
+    }
+  }
+
+  private async build(id: string): Promise<Room> {
     const r = this.renderer;
-    const meta: Meta = await (await fetch(`${BASE}/scene.json`)).json();
-    this.meta = meta;
-    let done = 0;
-    const tick = <T,>(p: Promise<T>) => p.then((v) => { done++; onProgress?.(done / 4); return v; });
+    const base = sceneBase(id);
+    const res = await fetch(`${base}/scene.json`);
+    if (!res.ok) throw new Error(`${base}/scene.json: ${res.status}`);
+    const meta: Meta = await res.json();
     const big = Math.max(screen.width, screen.height) * Math.min(devicePixelRatio, 2) > 1600 && r.capabilities.maxTextureSize >= 4096;
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const [gltf, atlasBmp, lutBmp, backBmp] = await Promise.all([
-      tick(loader.loadAsync(`${BASE}/room.glb`)),
-      tick(image(`${BASE}/atlas_${big ? 4096 : 2048}`)),
-      tick(bitmap(`${BASE}/lut.png`)),
-      tick(meta.backdrop ? image(`${BASE}/backdrop_${big ? 2560 : 1600}`).catch(() => null) : Promise.resolve(null)),
+      loader.loadAsync(`${base}/room.glb`),
+      image(`${base}/atlas_${big ? 4096 : 2048}`),
+      bitmap(`${base}/lut.png`),
+      meta.backdrop ? image(`${base}/backdrop_${big ? 2560 : 1600}`).catch(() => null) : Promise.resolve(null),
     ]);
+    if (this.disposed) throw new Error("Room3D disposed");
 
-    const atlas = this.texture(atlasBmp);
-    const mat = (uv: boolean, map: THREE.Texture | null, id = -1) => {
+    const scene = new THREE.Scene();
+    const world = new THREE.Group();
+    scene.add(world);
+    const mats: THREE.RawShaderMaterial[] = [];
+    const textures = [this.texture(atlasBmp)];
+    const planes = new THREE.Vector2(...meta.planes);
+    const mat = (uv: boolean, map: THREE.Texture | null, hs = -1) => {
       const m = new THREE.RawShaderMaterial({
         vertexShader: SCENE_VS, fragmentShader: SCENE_FS, glslVersion: THREE.GLSL3,
         defines: uv ? { USE_UV: "" } : {},
         uniforms: {
-          uMap: { value: map }, uIdPass: { value: 0 }, uId: { value: id },
-          uMirror: { value: 0 }, uMirrorY: { value: 0 }, uPlanes: { value: new THREE.Vector2(...PLANES) },
+          uMap: { value: map }, uIdPass: { value: 0 }, uId: { value: hs },
+          uMirror: { value: 0 }, uMirrorY: { value: 0 }, uPlanes: { value: planes },
         },
       });
-      this.sceneMats.push(m);
+      mats.push(m);
       return m;
     };
     gltf.scene.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       const uv = !!mesh.geometry.getAttribute("uv");
-      mesh.material = mat(uv, uv ? atlas : null);
+      mesh.material = mat(uv, uv ? textures[0] : null);
       mesh.frustumCulled = false;
     });
-    this.scene.add(this.world);
-    this.world.add(gltf.scene);
+    world.add(gltf.scene);
 
+    let backdrop: THREE.Mesh | null = null;
     if (backBmp && meta.backdrop) {
       const b = meta.backdrop;
       const fwd = v3(b.fwd), up = v3(b.up), right = v3(b.right);
-      const c = v3(b.pos).addScaledVector(fwd, BACKDROP_DIST);
-      const hw = BACKDROP_DIST * Math.tan((b.hfov / 2) * DEG), hh = hw / b.aspect;
+      const dist = b.dist ?? BACKDROP_DIST;
+      const c = v3(b.pos).addScaledVector(fwd, dist);
+      const hw = dist * Math.tan((b.hfov / 2) * DEG), hh = hw / b.aspect;
       const corner = (sx: number, sy: number) => c.clone().addScaledVector(right, sx * hw).addScaledVector(up, sy * hh);
       const p = [corner(-1, 1), corner(1, 1), corner(-1, -1), corner(1, -1)];
       const g = new THREE.BufferGeometry();
@@ -396,20 +508,29 @@ export class Room3D {
       g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), 2));
       g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(16).fill(255), 4, true));
       g.setIndex([0, 2, 1, 1, 2, 3]);
-      const win = meta.ids.indexOf("window") + 1;
-      const m = new THREE.Mesh(g, mat(true, this.texture(backBmp), win));
-      m.frustumCulled = false;
-      this.world.add(m);
-      this.backdrop = m;
+      const tex = this.texture(backBmp);
+      textures.push(tex);
+      backdrop = new THREE.Mesh(g, mat(true, tex, meta.ids.indexOf("window") + 1));
+      backdrop.frustumCulled = false;
+      world.add(backdrop);
     }
 
-    this.final.uniforms.uLut.value = this.lut(lutBmp, meta.lut.n);
-    this.final.uniforms.uLutRange.value.set(meta.lut.lo, meta.lut.hi, meta.lut.n);
-    this.final.uniforms.uK.value = meta.encodeK;
-    this.bright.uniforms.uK.value = meta.encodeK;
-    this.decodeMat.uniforms.uK.value = meta.encodeK;
-    // upload everything now so the first visible frame does not stall
-    r.compile(this.scene, this.camera);
+    const lut = this.lut(lutBmp, meta.lut.n);
+    // upload now so neither the first frame nor a scene change stalls
+    for (const t of [...textures, lut]) r.initTexture(t);
+    r.compile(scene, this.camera);
+    const mc = meta.mirrorClear;
+    return {
+      id, meta, scene, world, backdrop, mats, lut, textures,
+      mirrorClear: new THREE.Color().setRGB(mc[0], mc[1], mc[2], THREE.LinearSRGBColorSpace),
+    };
+  }
+
+  private free(room: Room) {
+    room.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose(); });
+    for (const m of room.mats) m.dispose();
+    for (const t of room.textures) t.dispose();
+    room.lut.dispose();
   }
 
   private texture(bmp: ImageBitmap) {
@@ -455,9 +576,11 @@ export class Room3D {
     const hf = r.extensions.has("EXT_color_buffer_float") || r.extensions.has("EXT_color_buffer_half_float");
     this.main?.dispose();
     this.ids?.dispose();
+    this.out?.dispose();
     this.disposeChain();
     this.main = new THREE.WebGLRenderTarget(W, H, { samples: 4, type: THREE.UnsignedByteType, depthBuffer: true });
     this.ids = new THREE.WebGLRenderTarget(Math.ceil(W / 2), Math.ceil(H / 2), { type: THREE.UnsignedByteType, depthBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    this.out = new THREE.WebGLRenderTarget(W, H, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
     const bt = { type: hf ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
     // Blender's bloom "Size" is relative to the image: 0.7 spreads glow across most of the frame.
     const levels = Math.max(2, Math.floor(Math.log2(GLARE_SIZE * Math.max(W, H))));
@@ -466,7 +589,7 @@ export class Room3D {
       this.down.push(new THREE.WebGLRenderTarget(w, h, bt));
       this.up.push(new THREE.WebGLRenderTarget(w, h, bt));
     }
-    this.refl = PLANES.map(() => {
+    this.refl = [0, 1].map(() => {
       const mirror = new THREE.WebGLRenderTarget(Math.ceil(W / 2), Math.ceil(H / 2), { type: THREE.UnsignedByteType, depthBuffer: true });
       const down: THREE.WebGLRenderTarget[] = [], up: THREE.WebGLRenderTarget[] = [];
       for (let i = 0; i < REFL_LEVELS; i++) {
@@ -499,11 +622,15 @@ export class Room3D {
     const ty = o.ty - o.lookX * (still ? 0 : 1.6), tp = o.tp - o.lookY * (still ? 0 : 0.9);
     o.yaw += (ty - o.yaw) * k;
     o.pitch += (tp - o.pitch) * k;
+    if (this.prev) {
+      this.fade = Math.min(1, this.fade + dt / this.fadeDur);
+      if (this.fade >= 1) this.prev = null;
+    }
     this.updateCamera();
   }
 
   private updateCamera() {
-    if (!this.meta) return;
+    if (!this.cur) return;
     const c = this.meta.cameras[this.variant];
     const fwd0 = v3(c.fwd), up0 = v3(c.up);
     const right0 = fwd0.clone().cross(up0).normalize();
@@ -529,7 +656,7 @@ export class Room3D {
 
   /** Hotspot index under a CSS-pixel position (from the last rendered id buffer), or -1. */
   pick(x: number, y: number) {
-    if (!this.ids) return -1;
+    if (!this.ids || this.prev) return -1;
     const { w, h } = this.size;
     const px = Math.floor((x / w) * this.ids.width), py = Math.floor((1 - y / h) * this.ids.height);
     if (px < 0 || py < 0 || px >= this.ids.width || py >= this.ids.height) return -1;
@@ -545,7 +672,7 @@ export class Room3D {
   }
 
   hotspotRect(name: string): Rect | null {
-    const hs = this.meta?.hotspots[name];
+    const hs = this.cur?.meta.hotspots[name];
     if (!hs) return null;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let i = 0; i < 8; i++) {
@@ -566,55 +693,82 @@ export class Room3D {
   }
 
   draw(p: DrawParams) {
+    const cur = this.cur;
+    if (!cur) return;
+    const me = cur.meta.hotspots.me?.anchor;
+    if (me) {
+      const [x, y] = this.project(me);
+      this.final.uniforms.uFocus.value.set(x / this.size.w, 1 - y / this.size.h);
+    }
+    if (this.prev) {
+      this.renderRoom(this.prev, { ...p, hover: -1, hoverAmt: 0, open: -1, dim: 0, reveal: 1 }, this.out, false, null);
+      this.renderRoom(cur, p, null, true, this.out.texture);
+    } else {
+      this.renderRoom(cur, p, null, true, null);
+    }
+  }
+
+  private renderRoom(room: Room, p: DrawParams, target: THREE.WebGLRenderTarget | null, idPass: boolean, prev: THREE.Texture | null) {
     const r = this.renderer;
+    const { scene, world, mats, meta } = room;
     r.setRenderTarget(this.main);
-    r.render(this.scene, this.camera);
-    for (const m of this.sceneMats) m.uniforms.uIdPass.value = 1;
-    r.setRenderTarget(this.ids);
-    r.render(this.scene, this.camera);
-    for (const m of this.sceneMats) m.uniforms.uIdPass.value = 0;
+    r.render(scene, this.camera);
+    if (idPass) {
+      for (const m of mats) m.uniforms.uIdPass.value = 1;
+      r.setRenderTarget(this.ids);
+      r.render(scene, this.camera);
+      for (const m of mats) m.uniforms.uIdPass.value = 0;
+    }
     const texel = (t: THREE.WebGLRenderTarget, s = 1) => new THREE.Vector2(s / t.width, s / t.height);
 
-    // Planar reflections: the same camera looking at the scene mirrored about each glossy plane.
+    // Planar reflections: the same camera looking at the room mirrored about each glossy plane.
     // The bake culled the ceiling (never seen directly), so mirrors clear to a ceiling-like
     // radiance instead of letting the sky backdrop show through.
-    const reflected = PLANES.map((h, p) => {
-      const { mirror, down: rd, up: ru } = this.refl[p];
-      this.world.scale.y = -1;
-      this.world.position.y = 2 * h;
-      this.world.updateMatrixWorld(true);
-      for (const m of this.sceneMats) { m.uniforms.uMirror.value = 1; m.uniforms.uMirrorY.value = h; }
-      if (this.backdrop) this.backdrop.visible = false;
-      r.setClearColor(MIRROR_CLEAR, 1);
+    const reflected = meta.planes.map((h, i) => {
+      const { mirror, down: rd, up: ru } = this.refl[i];
+      world.scale.y = -1;
+      world.position.y = 2 * h;
+      world.updateMatrixWorld(true);
+      for (const m of mats) { m.uniforms.uMirror.value = 1; m.uniforms.uMirrorY.value = h; }
+      if (room.backdrop) room.backdrop.visible = false;
+      r.setClearColor(room.mirrorClear, 1);
       r.setRenderTarget(mirror);
-      r.render(this.scene, this.camera);
-      this.pass(this.decodeMat, rd[0], { uSrc: mirror.texture, uTexel: texel(mirror, 0.5) });
-      for (let i = 1; i < rd.length; i++) this.pass(this.downMat, rd[i], { uSrc: rd[i - 1].texture, uTexel: texel(rd[i - 1]) });
+      r.render(scene, this.camera);
+      this.pass(this.decodeMat, rd[0], { uSrc: mirror.texture, uTexel: texel(mirror, 0.5), uK: meta.encodeK });
+      for (let k = 1; k < rd.length; k++) this.pass(this.downMat, rd[k], { uSrc: rd[k - 1].texture, uTexel: texel(rd[k - 1]) });
       let src = rd[rd.length - 1];
-      for (let i = rd.length - 2; i >= 0; i--) {
-        this.pass(this.upMat, ru[i], { uSrc: src.texture, uAdd: rd[i].texture, uTexel: texel(src) });
-        src = ru[i];
+      for (let k = rd.length - 2; k >= 0; k--) {
+        this.pass(this.upMat, ru[k], { uSrc: src.texture, uAdd: rd[k].texture, uTexel: texel(src) });
+        src = ru[k];
       }
       return src.texture;
     });
     r.setClearColor(0x000000, 1);
-    if (this.backdrop) this.backdrop.visible = true;
-    for (const m of this.sceneMats) m.uniforms.uMirror.value = 0;
-    this.world.scale.y = 1;
-    this.world.position.y = 0;
-    this.world.updateMatrixWorld(true);
+    if (room.backdrop) room.backdrop.visible = true;
+    for (const m of mats) m.uniforms.uMirror.value = 0;
+    world.scale.y = 1;
+    world.position.y = 0;
+    world.updateMatrixWorld(true);
 
     const { down, up } = this;
     const n = down.length;
-    this.pass(this.bright, down[0], { uSrc: this.main.texture, uTexel: texel(this.main, 0.5) });
-    for (let i = 1; i < n; i++) this.pass(this.downMat, down[i], { uSrc: down[i - 1].texture, uTexel: texel(down[i - 1]) });
+    this.pass(this.bright, down[0], { uSrc: this.main.texture, uTexel: texel(this.main, 0.5), uK: meta.encodeK });
+    for (let k = 1; k < n; k++) this.pass(this.downMat, down[k], { uSrc: down[k - 1].texture, uTexel: texel(down[k - 1]) });
     let src = down[n - 1];
-    for (let i = n - 2; i >= 0; i--) {
-      this.pass(this.upMat, up[i], { uSrc: src.texture, uAdd: down[i].texture, uTexel: texel(src) });
-      src = up[i];
+    for (let k = n - 2; k >= 0; k--) {
+      this.pass(this.upMat, up[k], { uSrc: src.texture, uAdd: down[k].texture, uTexel: texel(src) });
+      src = up[k];
     }
 
     const u = this.final.uniforms;
+    const g = meta.grade;
+    u.uLut.value = room.lut;
+    u.uLutRange.value.set(meta.lut.lo, meta.lut.hi, meta.lut.n);
+    u.uK.value = meta.encodeK;
+    u.uBloom.value = g.bloom;
+    u.uTint.value.set(...g.tint);
+    u.uGain.value.set(...g.gain);
+    u.uLift.value.set(...g.lift);
     u.uMain.value = this.main.texture;
     u.uGlare.value = up[0].texture;
     u.uGlareNorm.value = 1 / n;
@@ -627,8 +781,12 @@ export class Room3D {
     u.uHover.value = p.hover; u.uHoverAmt.value = p.hoverAmt; u.uOpen.value = p.open; u.uDim.value = p.dim;
     u.uTime.value = p.time; u.uDust.value = p.dust; u.uReveal.value = p.reveal;
     u.uDrift.value.set(this.orbit.yaw * 0.012, -this.orbit.pitch * 0.012);
+    // never sample the target being written: the outgoing pass gets an unrelated texture
+    u.uPrev.value = prev ?? this.ids.texture;
+    u.uFade.value = prev ? this.fade : 1;
+    u.uBlocks.value = this.blocks ? 1 : 0;
     this.quad.material = this.final;
-    r.setRenderTarget(null);
+    r.setRenderTarget(target);
     r.render(this.quadScene, this.ortho);
   }
 
@@ -647,9 +805,15 @@ export class Room3D {
   }
 
   dispose() {
+    this.disposed = true;
+    for (const p of this.rooms.values()) p.then((r) => this.free(r), () => {});
+    this.rooms.clear();
+    this.cur = this.prev = null;
     this.main?.dispose();
     this.ids?.dispose();
+    this.out?.dispose();
     this.disposeChain();
     this.renderer.dispose();
   }
 }
+

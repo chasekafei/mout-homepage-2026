@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ABOUT, BOOKS, CATS, HOTSPOTS, PRODUCTS } from "../content/site";
+import { ABOUT, BOOKS, CATS, PRODUCTS, SCENES, type SceneId } from "../content/site";
 
 type Go = (path: string) => void;
 
@@ -36,7 +36,7 @@ function ScaledFrame({ src, title, w, h }: { src: string; title: string; w: numb
 
 type Photo = { cat: string; src: string; thumb: string; w: number; h: number };
 
-export function CatsPanel({ who, go }: { who: "shaojiu" | "xiaoba"; go: Go }) {
+export function CatsPanel({ who, scene, go }: { who: "shaojiu" | "xiaoba"; scene: SceneId; go: Go }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [big, setBig] = useState<Photo | null>(null);
   useEffect(() => { fetch("/media/cats/index.json").then((r) => r.json()).then(setPhotos).catch(() => {}); }, []);
@@ -48,10 +48,10 @@ export function CatsPanel({ who, go }: { who: "shaojiu" | "xiaoba"; go: Go }) {
     <div className="cats">
       <div className="cat-card">
         <div>
-          <span className="meta">{cat.breed} · {cat.spot}</span>
+          <span className="meta">{cat.breed} · {cat.spot[scene]}</span>
           {cat.lines.map((l) => <p key={l}>{l}</p>)}
         </div>
-        <button type="button" className="chip" onClick={() => go(`/create/cats/${other}`)}>看看{CATS[other].name} →</button>
+        <button type="button" className="chip" onClick={() => go(`/${scene}/cats/${other}`)}>看看{CATS[other].name} →</button>
       </div>
       {big ? (
         <figure className="cat-big">
@@ -165,14 +165,14 @@ export function ChatPanel() {
   );
 }
 
-export function IndexPanel({ go }: { go: Go }) {
+export function IndexPanel({ scene, go }: { scene: SceneId; go: Go }) {
   return (
     <div className="index">
-      <p className="lede">不想在场景里找东西的话，这里是创作场景里全部的内容。</p>
+      <p className="lede">不想在场景里找东西的话，这里是{SCENES[scene].label}场景里全部的内容。</p>
       <ul className="index-list">
-        {HOTSPOTS.map((h) => (
+        {SCENES[scene].hotspots.map((h) => (
           <li key={h.id}>
-            <a href={`/create/${h.route}`} onClick={(e) => { e.preventDefault(); go(`/create/${h.route}`); }}>
+            <a href={`/${scene}/${h.route}`} onClick={(e) => { e.preventDefault(); go(`/${scene}/${h.route}`); }}>
               <span className="hover-kind">{h.kind}</span>
               <strong>{h.label}</strong>
               <span>{h.hint}</span>

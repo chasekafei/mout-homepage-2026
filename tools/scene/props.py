@@ -7,6 +7,7 @@ import bpy
 
 import blib as B
 import room as R
+import stage
 from blib import srgb
 
 # Interactive hotspot ids (order defines the mask encoding; max 15).
@@ -22,9 +23,7 @@ HOTSPOTS = [
     "window",       # window view           -> 出发 (teaser)
 ]
 
-DESK_TOP = 0.76
-# desk group frame: character sits at local (0, -0.42) facing +Y
-DESK_ROOT = ((-0.1, 1.12, 0.0), -24.0)
+DESK_TOP = stage.DESK_TOP
 MAIN_X0, MAIN_X1 = -1.0, 1.75
 MAIN_Y0, MAIN_Y1 = 0.0, 0.85
 
@@ -45,8 +44,7 @@ def build_desk():
     B.use_collection("desk")
     g = graphite()
     gd = graphite_dark()
-    (loc, rot) = DESK_ROOT
-    desk_root = B.empty("desk_root", loc, (0, 0, rot))
+    desk_root = stage.desk_frame()
     t = 0.045
     B.box_minmax("desk_top", (MAIN_X0, MAIN_Y0, DESK_TOP - t), (MAIN_X1, MAIN_Y1, DESK_TOP), g, bevel=0.008,
                  parent=desk_root)
@@ -75,7 +73,7 @@ def build_chair():
     B.use_collection("chair")
     fab = B.mat_noise("chair_fabric", srgb("#4a4b51"), srgb("#3f4045"), scale=900, rough=0.8, bump=0.2, spec=0.3)
     frm = B.mat("chair_frame", srgb("#2a2b2f"), 0.4, metal=0.5)
-    root = B.empty("chair_root", (0.04, -0.17, 0), (0, 0, 16), parent=desk_root)
+    root = stage.chair_frame(desk_root)
     B.box("chair_seat", (0.52, 0.5, 0.08), (0, 0.02, 0.47), material=fab, bevel=0.025, parent=root)
     B.box("chair_back", (0.44, 0.07, 0.44), (0, -0.25, 0.79), (-8, 0, 0), material=fab, bevel=0.03, parent=root)
     B.box("chair_back_frame", (0.48, 0.045, 0.48), (0, -0.285, 0.79), (-8, 0, 0), material=frm, bevel=0.02,

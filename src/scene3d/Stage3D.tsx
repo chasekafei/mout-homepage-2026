@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { HOTSPOTS } from "../content/site";
+import { SCENES, type SceneId } from "../content/site";
 import { player } from "../lib/audio";
 import type { ScreenRect } from "../scene/Stage2D";
 import { Room3D, type Variant } from "./Room3D";
 
 type Props = {
+  scene: SceneId;
+  /** Rooms to fetch in the background once the first one is on screen. */
+  preload: SceneId[];
   openId: number;
   onOpen: (id: number, origin: ScreenRect) => void;
   onBackground: () => void;
@@ -14,13 +17,14 @@ type Props = {
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const coarse = () => matchMedia("(pointer: coarse)").matches;
-const LQIP: Record<Variant, string> = { desktop: "/scene/create/beauty_desktop_lqip.webp", mobile: "/scene/create/beauty_mobile_lqip.webp" };
+const lqip = (scene: SceneId, v: Variant) => SCENES[scene].flat ? `url(/scene/${scene}/beauty_${v}_lqip.webp)` : undefined;
 const FRAME: Record<Variant, { aspect: number; focus: [number, number] }> = {
   desktop: { aspect: 16 / 9, focus: [0.47, 0.56] },
   mobile: { aspect: 9 / 16, focus: [0.56, 0.5] },
 };
+const idle = (fn: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1500));
 
-export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props) {
+export function Stage3D({ scene, preload, openId, onOpen, onBackground, onReady, onFail }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const waveCanvas = useRef<HTMLCanvasElement>(null);
@@ -30,11 +34,15 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
   const [size, setSize] = useState({ w: innerWidth, h: innerHeight });
   const variant: Variant = size.w / size.h < 0.9 ? "mobile" : "desktop";
   const [loaded, setLoaded] = useState(false);
+  /** The room actually on screen; lags `scene` while the next room loads and fades in. */
+  const [shown, setShown] = useState<SceneId>(scene);
+  const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(-1);
   const [dragging, setDragging] = useState(false);
+  const HOTSPOTS = SCENES[shown].hotspots;
 
   const live = useRef({
-    hover: -1, hoverAmt: 0, lastHover: -1, dim: 0, reveal: 0, open: -1, t0: performance.now(),
+    hover: -1, hoverAmt: 0, lastHover: -1, dim: 0, reveal: 0, open: -1, t0: performance.now(), want: scene as string, busy: false,
     down: null as null | { x: number; y: number; lx: number; ly: number; moved: boolean; id: number },
   });
 
@@ -49,15 +57,37 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
     try { r = new Room3D(canvas.current!); } catch { onFail(); return; }
     room.current = r;
     let cancelled = false;
-    r.load().then(() => {
+    r.show(scene, { instant: true }).then(() => {
       if (cancelled) return;
       const s = host.current!.getBoundingClientRect();
       r.setView(s.width / s.height < 0.9 ? "mobile" : "desktop", s.width, s.height, pixelRatio());
+      setShown(scene);
       setLoaded(true);
-    }).catch((e) => { console.error(e); if (!cancelled) onFail(); });
+    }).catch((e) => { if (!cancelled) { console.error(e); onFail(); } });
     return () => { cancelled = true; r.dispose(); room.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const r = room.current;
+    if (!loaded || !r || r.current === scene) return;
+    let cancelled = false;
+    live.current.want = scene;
+    live.current.busy = true;
+    setBusy(true);
+    setHoverId(-1);
+    r.show(scene, { still: reducedMotion() }).then((ok) => {
+      if (!cancelled && ok) setShown(scene);
+    }).catch((e) => { console.error(e); live.current.want = r.current; });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, scene]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const h = idle(() => { for (const id of preload) room.current?.preload(id).catch(() => {}); });
+    return () => { if ("cancelIdleCallback" in window) cancelIdleCallback(h as number); else clearTimeout(h as number); };
+  }, [loaded, preload.join()]);
 
   useEffect(() => {
     if (loaded) room.current?.setView(variant, size.w, size.h, pixelRatio());
@@ -81,7 +111,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
   };
 
   const onDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 || !room.current) return;
+    if (e.button !== 0 || !room.current || busy) return;
     const [x, y] = local(e);
     live.current.down = { x, y, lx: x, ly: y, moved: false, id: e.pointerId };
     host.current!.setPointerCapture(e.pointerId);
@@ -100,7 +130,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
     }
     if (e.pointerType === "touch") return;
     r.look((x / size.w) * 2 - 1, (y / size.h) * 2 - 1);
-    setHoverId(r.pick(x, y));
+    setHoverId(busy ? -1 : r.pick(x, y));
   };
 
   const onUp = (e: React.PointerEvent) => {
@@ -109,7 +139,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
     if (host.current!.hasPointerCapture(e.pointerId)) host.current!.releasePointerCapture(e.pointerId);
     setDragging(false);
     const r = room.current;
-    if (!d || d.moved || !r || !loaded) return;
+    if (!d || d.moved || !r || !loaded || busy) return;
     const [x, y] = local(e);
     const id = r.pick(x, y);
     if (id < 0) { onBackground(); return; }
@@ -125,6 +155,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
     const smooth = new Float32Array(28);
     let last = performance.now();
     let readySent = false;
+    const podcast = HOTSPOTS.findIndex((h) => h.id === "podcast");
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
@@ -142,6 +173,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
         hoverAmt: L.hoverAmt, open: L.open, dim: L.dim, time: still ? 0 : t, dust: still ? 0 : 1, reveal: L.reveal,
       });
       if (!readySent) { readySent = true; onReady?.(); }
+      if (L.busy && r.current === L.want && !r.transitioning) { L.busy = false; setBusy(false); }
 
       const { w, h } = size;
       HOTSPOTS.forEach((hs, i) => {
@@ -168,19 +200,22 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
       }
 
       const wc = waveCanvas.current;
-      const mic = r.meta.mic;
-      if (wc && mic) {
-        const ctx = wc.getContext("2d")!;
+      const mic = r.meta.markers.mic;
+      const ctx = wc?.getContext("2d");
+      if (wc && ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, wc.width, wc.height);
+      }
+      if (wc && ctx && mic && !r.transitioning) {
         const dpr = wc.width / w;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, w, h);
         const right = r.cameraRight();
         const at = (k: number) => r.project([mic[0] + right.x * k, mic[1] + right.y * k, mic[2] + right.z * k]);
         const [x0, yc, front] = at(0.06);
         const [x1] = at(0.15);
         const W = x1 - x0, H = W * 0.55;
         const playing = player.levels(levels);
-        const focus = L.hover === 1 || L.open === 1;
+        const focus = (L.hover >= 0 && L.hover === podcast) || (L.open >= 0 && L.open === podcast);
         const n = levels.length;
         for (let i = 0; i < n; i++) {
           const env = Math.sin((i / (n - 1)) * Math.PI) ** 0.7;
@@ -189,7 +224,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
           smooth[i] += (target * env - smooth[i]) * (1 - Math.exp(-dt * 14));
         }
         if (front && W > 4) {
-          const alpha = (0.55 + (focus || playing ? 0.4 : 0)) * L.reveal * (1 - L.dim * (L.open === 1 ? 0 : 0.6));
+          const alpha = (0.55 + (focus || playing ? 0.4 : 0)) * L.reveal * (1 - L.dim * (L.open === podcast ? 0 : 0.6));
           ctx.globalCompositeOperation = "lighter";
           ctx.shadowColor = "rgba(64, 232, 205, 0.9)";
           ctx.shadowBlur = 8;
@@ -210,7 +245,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
     const vis = () => { if (document.hidden) cancelAnimationFrame(raf); else { last = performance.now(); raf = requestAnimationFrame(frame); } };
     document.addEventListener("visibilitychange", vis);
     return () => { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", vis); };
-  }, [loaded, size, onReady]);
+  }, [loaded, size, onReady, shown]);
 
   const touch = coarse();
   const f = FRAME[variant];
@@ -222,8 +257,8 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
   return (
     <div
       ref={host}
-      className={`stage stage-3d ${hover >= 0 ? "is-pointing" : ""} ${dragging ? "is-dragging" : ""}`}
-      style={{ backgroundImage: `url(${LQIP[variant]})`, backgroundSize: `${FW}px ${FH}px`, backgroundPosition: `${-offX}px ${-offY}px` }}
+      className={`stage stage-3d ${hover >= 0 ? "is-pointing" : ""} ${dragging ? "is-dragging" : ""} ${busy ? "is-busy" : ""}`}
+      style={{ backgroundImage: lqip(shown, variant), backgroundSize: `${FW}px ${FH}px`, backgroundPosition: `${-offX}px ${-offY}px` }}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
@@ -237,7 +272,7 @@ export function Stage3D({ openId, onOpen, onBackground, onReady, onFail }: Props
           const active = openId === i;
           return (
             <button
-              key={h.id}
+              key={`${shown}-${h.id}`}
               ref={(el) => { beaconEls.current[i] = el; }}
               type="button"
               className={`beacon ${active ? "is-open" : ""} ${hover === i ? "is-hover" : ""} ${openId >= 0 && !active ? "is-muted" : ""}`}

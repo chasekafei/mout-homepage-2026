@@ -53,6 +53,8 @@ a { color: inherit; }
 .stage-3d { touch-action: none; cursor: grab; }
 .stage-3d.is-dragging { cursor: grabbing; }
 .stage-3d .beacon { left: 0; top: 0; will-change: transform; }
+.stage-3d.is-busy { cursor: progress; }
+.app.is-ready .stage-3d.is-busy .beacon { opacity: 0; pointer-events: none; transition-duration: 0.15s; }
 .stage-canvas, .stage-wave { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage-wave { pointer-events: none; }
 .stage-img { position: absolute; max-width: none; }
@@ -366,6 +368,12 @@ a { color: inherit; }
 .bubble-q { justify-self: end; background: var(--ink); color: var(--paper); border-bottom-right-radius: 4px; }
 .bubble-a { background: var(--paper-2); border-bottom-left-radius: 4px; }
 .chat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* now */
+.now-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #3fbf8a; margin-right: 7px; vertical-align: 1px; box-shadow: 0 0 0 3px #3fbf8a33; }
+.now-notes { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 6px; }
+.now-q { margin: 4px 0 18px; padding: 14px 16px; border-left: 4px solid var(--yellow); background: var(--paper-2); font: 700 18px/1.6 var(--sans); }
+.now-thought p { color: var(--ink-2); }
 
 /* index */
 .index-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

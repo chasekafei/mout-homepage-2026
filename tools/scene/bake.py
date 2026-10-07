@@ -1,4 +1,4 @@
-"""Bake the creation room for the realtime web viewer.
+"""Bake a scene for the realtime web viewer.
 
 Every visible surface stores its final outgoing radiance (albedo x light + emission):
   * small-faced meshes (voxels, leaves, cables) -> per-vertex colour
@@ -6,12 +6,12 @@ Every visible surface stores its final outgoing radiance (albedo x light + emiss
 Faces that no camera pose inside the orbit range can see stay in the scene as occluders while
 baking and are dropped from the export.
 
-Usage (repo root):
+Usage (repo root), every stage takes --scene create|now (default create):
   Blender -b --factory-startup --python tools/scene/bake.py -- --stage plan
   Blender -b --factory-startup --python tools/scene/bake.py -- --stage bake [--atlas 0] [--samples 384] [--vsamples 768]
   Blender -b --factory-startup --python tools/scene/bake.py -- --stage backdrop [--samples 256]
   Blender -b --factory-startup --python tools/scene/bake.py -- --stage lut
-Raw outputs go to .cache/bake/; `node tools/content/build-assets.mjs scene3d` publishes them.
+Raw outputs go to .cache/bake/<scene>/; `node tools/content/build-assets.mjs scene3d <scene>` publishes them.
 """
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ from mathutils import Matrix, Vector  # noqa: E402
 from mathutils.bvhtree import BVHTree  # noqa: E402
 
 import build as BUILD  # noqa: E402
-import room  # noqa: E402
 
 ROOT = HERE.parents[1]
-OUT = ROOT / ".cache" / "bake"
+OUT = ROOT / ".cache" / "bake"  # + /<scene>, set in main()
+MARKERS: dict = {}
 
 # Must match src/scene3d/config.ts
 ORBIT = {
@@ -54,6 +54,7 @@ MAX_ATLAS = 4096
 def parse():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
+    ap.add_argument("--scene", default="create")
     ap.add_argument("--stage", default="plan")
     ap.add_argument("--atlas", type=int, default=0, help="force atlas size (0 = from texel budget)")
     ap.add_argument("--density", type=float, default=1.0)
@@ -79,8 +80,9 @@ def encode(x):
 
 # ---------------------------------------------------------------- scene + cameras
 
-def build_scene(samples=64):
-    a = argparse.Namespace(cam="desktop", campos="", target="", res=1280, samples=samples, exposure=-0.8, mode="bake")
+def build_scene(scene, samples=64):
+    a = argparse.Namespace(scene=scene, cam="desktop", campos="", target="", res=1280, samples=samples, exposure=None,
+                           mode="bake")
     BUILD.build(a)
     BUILD.setup_render(a)
     s = bpy.context.scene
@@ -142,6 +144,14 @@ def find_hs(ob):
     return ""
 
 
+def find_prop(ob, key, default):
+    while ob is not None:
+        if key in ob:
+            return ob[key]
+        ob = ob.parent
+    return default
+
+
 def in_exterior(ob):
     return any(c.name == "exterior" for c in ob.users_collection)
 
@@ -165,6 +175,7 @@ def realize():
         o = bpy.data.objects.new(f"r_{ob.name}", me)
         o.matrix_world = ob.matrix_world.copy()
         o["hs"] = hs
+        o["texel"] = find_prop(ob, "texel", 1.0)
         o["src"] = ob.users_collection[0].name if ob.users_collection else ""
         o["detail"] = any(m and m.use_nodes and any(n.type == "TEX_IMAGE" for n in m.node_tree.nodes)
                           for m in me.materials)
@@ -193,9 +204,10 @@ def dice(objs, cell=0.5, min_area=0.3):
     for o in objs:
         M = o.matrix_world
         s2 = abs(M.to_3x3().determinant()) ** (2 / 3)
+        k = 1.0 / o.get("texel", 1.0)
         bm = bmesh.new()
         bm.from_mesh(o.data)
-        big = [f for f in bm.faces if f.calc_area() * s2 > min_area]
+        big = [f for f in bm.faces if f.calc_area() * s2 > min_area * k * k]
         if not big:
             bm.free()
             continue
@@ -212,9 +224,10 @@ def dice(objs, cell=0.5, min_area=0.3):
             n = Vector((0, 0, 0))
             n[axis] = 1.0
             nl = (Mt @ n).normalized()
-            for k in range(math.floor(lo[axis] / cell) + 1, math.ceil(hi[axis] / cell)):
+            step = cell * k
+            for i in range(math.floor(lo[axis] / step) + 1, math.ceil(hi[axis] / step)):
                 c = Vector(lo)
-                c[axis] = k * cell
+                c[axis] = i * step
                 if c[axis] - lo[axis] < 0.05 or hi[axis] - c[axis] < 0.05:
                     continue
                 r = bmesh.ops.bisect_plane(bm, geom=[g for g in geom if g.is_valid], dist=1e-5,
@@ -449,7 +462,8 @@ def freeze_object(o, hs_index):
         me.attributes.remove(v)
         v = me.attributes.new("vcol", "FLOAT_COLOR", "CORNER")
         v.data.foreach_set("color", cc.ravel())
-    for name, val in (("__hs", hs_index), ("__det", int(bool(o.get("detail"))))):
+    for name, val in (("__hs", hs_index), ("__det", int(bool(o.get("detail")))),
+                      ("__tex", int(round(100 * o.get("texel", 1.0))))):
         a = me.attributes.get(name) or me.attributes.new(name, "INT", "FACE")
         a.data.foreach_set("value", np.full(len(me.polygons), val, np.int32))
     me.transform(o.matrix_world)
@@ -466,8 +480,7 @@ def merge(objs, name):
 
 
 def merge_all(live, occ_col):
-    import props
-    ids = props.HOTSPOTS
+    ids = BUILD.SCENE.HOTSPOTS
     mats = {s.material for o in list(live) + list(occ_col.objects) for s in o.material_slots if s.material}
     for m in mats:
         if m.use_nodes:
@@ -535,6 +548,7 @@ def unwrap(atlas_objs, poses, density, force, bvh):
     islands_total = 0
     hidden = 0
     per_obj = {}
+    by_tex = {}
     for o in atlas_objs:
         need_before = need
         M = o.matrix_world
@@ -543,10 +557,13 @@ def unwrap(atlas_objs, poses, density, force, bvh):
         bm.from_mesh(o.data)
         uv = bm.loops.layers.uv["LM"]
         det = bm.faces.layers.int.get("__det")
+        tex = bm.faces.layers.int.get("__tex")
         isl = bmesh_linked_uv_islands(bm, uv)
         islands_total += len(isl)
         for faces in isl:
             bonus = 1.4 if det is not None and any(f[det] for f in faces) else 1.0
+            if tex is not None:
+                bonus *= max(f[tex] for f in faces) / 100.0
             a3 = 0.0
             auv = 0.0
             for f in faces:
@@ -574,6 +591,8 @@ def unwrap(atlas_objs, poses, density, force, bvh):
             s3 = abs(M.to_3x3().determinant()) ** (2 / 3)
             a3w = a3 * s3
             need += a3w * rho * rho
+            cls = max(f[tex] for f in faces) if tex is not None else 100
+            by_tex[cls] = by_tex.get(cls, 0.0) + a3w * rho * rho
             k = math.sqrt(a3w / auv) * rho / 1000.0
             uc = Vector((0.0, 0.0))
             n = 0
@@ -589,7 +608,8 @@ def unwrap(atlas_objs, poses, density, force, bvh):
         bm.free()
         per_obj[o.name] = need - need_before
     top = sorted(per_obj.items(), key=lambda x: -x[1])[:16]
-    log(f"atlas hidden islands={hidden}; top:", [(n, round(v / 1e6, 2)) for n, v in top])
+    log(f"atlas hidden islands={hidden}; top:", [(n, round(v / 1e6, 2)) for n, v in top],
+        "by texel %:", {k: round(v / 1e6, 2) for k, v in sorted(by_tex.items())})
     eff = 0.68
     res = force or int(min(MAX_ATLAS, max(512, 256 * math.ceil(math.sqrt(need / eff) / 256))))
     log(f"atlas: islands={islands_total} texels_needed={need / 1e6:.1f}M -> size {res} "
@@ -830,43 +850,31 @@ def export(vert, atl, anchors, res):
             "pos": to_gltf(f["pos"]), "fwd": to_gltf(f["fwd"]), "up": to_gltf(f["up"]),
             "vfov": math.degrees(2 * math.atan(f["tan_v"])), "aspect": ASPECT[name], **ORBIT[name],
         }
+    S = BUILD.SCENE
+    boxes = {k: (a["min"], a["max"], a["anchor"]) for k, a in anchors.items()}
+    boxes.update(S.extra_hotspots())
     hs = {}
-    for k, a in anchors.items():
-        lo, hi = np.array(to_gltf(a["min"])), np.array(to_gltf(a["max"]))
-        hs[k] = {"min": np.minimum(lo, hi).tolist(), "max": np.maximum(lo, hi).tolist(), "anchor": to_gltf(a["anchor"])}
-    lo = np.array(to_gltf((room.WIN_X0, room.BACK_Y, room.WIN_Z0)))
-    hi = np.array(to_gltf((room.WIN_X1, room.BACK_Y + room.WALL_T, room.CEIL - 0.12)))
-    hs["window"] = {"min": np.minimum(lo, hi).tolist(), "max": np.maximum(lo, hi).tolist(),
-                    "anchor": to_gltf(((room.WIN_X0 + room.WIN_X1) / 2, room.BACK_Y, 2.3))}
-    mic = bpy.data.objects.get("__mic_head")
+    for k, (mn, mx, anchor) in boxes.items():
+        lo, hi = np.array(to_gltf(mn)), np.array(to_gltf(mx))
+        hs[k] = {"min": np.minimum(lo, hi).tolist(), "max": np.maximum(lo, hi).tolist(), "anchor": to_gltf(anchor)}
+    g = S.GRADE
     manifest = {
-        "atlas": res, "encodeK": ENC_K, "lut": {"n": LUT_N, "lo": LUT_LO, "hi": LUT_HI},
-        "cameras": cams, "hotspots": hs,
-        "ids": __import__("props").HOTSPOTS,
-        "mic": to_gltf(mic.location) if mic else None,
+        "scene": S.__name__.removeprefix("scene_"), "atlas": res, "encodeK": ENC_K, "lut": {"n": LUT_N, "lo": LUT_LO, "hi": LUT_HI},
+        "grade": {"bloom": g["bloom"], "tint": g["glare_tint"], "gain": g["gain"], "lift": g["lift"]},
+        "planes": list(S.PLANES), "mirrorClear": list(S.MIRROR_CLEAR),
+        "cameras": cams, "hotspots": hs, "ids": S.HOTSPOTS,
+        "markers": {k: to_gltf(v) for k, v in MARKERS.items()},
     }
     (OUT / "room.json").write_text(json.dumps(manifest, indent=1))
     log("manifest", OUT / "room.json")
-
-
-def mark_mic():
-    """Remember the microphone head position for the waveform overlay."""
-    o = bpy.data.objects.get("mic_capsule")
-    if o is None:
-        return
-    co = [o.matrix_world @ v.co for v in o.data.vertices]
-    c = sum(co, Vector()) / len(co)
-    e = bpy.data.objects.new("__mic_head", None)
-    bpy.context.scene.collection.objects.link(e)
-    e.location = c
 
 
 # ---------------------------------------------------------------- stages
 
 def stage_bake(args, plan_only=False):
     t0 = time.time()
-    build_scene()
-    mark_mic()
+    build_scene(args.scene)
+    MARKERS.update(BUILD.SCENE.markers())
     poses = sample_poses()
     objs, anchors = realize()
     log(f"realized {len(objs)} objects in {time.time() - t0:.1f}s")
@@ -898,22 +906,16 @@ def stage_bake(args, plan_only=False):
 
 def stage_backdrop(args):
     """Exterior seen through the back window, rendered from the desktop camera into a linear EXR."""
-    import exterior
-    s = build_scene(args.samples)
+    s = build_scene(args.scene, args.samples)
+    bd = BUILD.SCENE.BACKDROP
     for o in s.objects:
         if o.type == "MESH" and not in_exterior(o):
             o.hide_render = True
-    # The exterior gets its own art-directed light; the room keeps the sun through the side window.
-    sun = bpy.data.objects["sun"]
-    sun.rotation_euler = (-exterior.SUN_DIR).to_track_quat("-Z", "Y").to_euler()
-    sun.data.energy = exterior.SUN_STRENGTH
-    bpy.data.objects["fill"].hide_render = True
-    amb = s.world.node_tree.nodes["amb_sky"]
-    amb.inputs["B"].default_value = (exterior.AMB, exterior.AMB, exterior.AMB, 1)
+    # The exterior gets its own art-directed light; the room keeps its own sun.
+    bd["light"](s)
     f = cam_frame("desktop")
-    target = Vector(((room.WIN_X0 + room.WIN_X1) / 2, room.BACK_Y + room.WALL_T, (room.WIN_Z0 + room.CEIL) / 2 + 0.1))
-    fwd = (target - f["pos"]).normalized()
-    hfov, aspect = 66.0, 1.3
+    fwd = (bd["target"] - f["pos"]).normalized()
+    hfov, aspect = bd["hfov"], bd["aspect"]
     c = bpy.data.cameras.new("cam_backdrop")
     c.sensor_fit = "HORIZONTAL"
     c.sensor_width = 36
@@ -944,7 +946,7 @@ def stage_backdrop(args):
     m = o.matrix_world.to_3x3()
     meta = {
         "pos": to_gltf(o.location), "fwd": to_gltf(m @ Vector((0, 0, -1))), "up": to_gltf(m @ Vector((0, 1, 0))),
-        "right": to_gltf(m @ Vector((1, 0, 0))), "hfov": hfov, "aspect": aspect,
+        "right": to_gltf(m @ Vector((1, 0, 0))), "hfov": hfov, "aspect": aspect, "dist": bd.get("dist", 40.0),
     }
     (OUT / "backdrop.json").write_text(json.dumps(meta, indent=1))
     log("backdrop written")
@@ -952,7 +954,7 @@ def stage_backdrop(args):
 
 def stage_lut(args):
     """Scene-linear -> display LUT carrying exposure, white balance, AgX and the look (no compositor effects)."""
-    s = build_scene()
+    s = build_scene(args.scene)
     N = LUT_N
     v = 2.0 ** (LUT_LO + np.linspace(0, 1, N) * (LUT_HI - LUT_LO))
     v[0] = 0.0
@@ -973,7 +975,9 @@ def stage_lut(args):
 
 
 def main():
+    global OUT
     args = parse()
+    OUT = OUT / args.scene
     if args.stage in ("plan", "bake"):
         stage_bake(args, plan_only=args.stage == "plan")
     elif args.stage == "backdrop":

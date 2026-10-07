@@ -63,7 +63,29 @@ await run(["--use-angle=metal"], async (page) => {
 
   await page.goto(`${base}/work`, { waitUntil: "networkidle" });
   await page.waitForTimeout(400);
-  check("deep link to unfinished state redirects", page.url().endsWith("/create"), page.url());
+  check("deep link to unfinished state redirects", page.url().endsWith("/now"), page.url());
+
+  for (const r of ["project", "thought", "cats/xiaoba", "cats/shaojiu", "window", "me"]) {
+    await page.goto(`${base}/now/${r}`, { waitUntil: "networkidle" });
+    await page.waitForSelector(".app.is-ready");
+    const sheet = await page.waitForSelector(".sheet", { timeout: 4000 }).then((e) => e.innerText(), () => "");
+    check(`now deep link /now/${r}`, sheet.trim().length > 20 && page.url().endsWith(`/now/${r}`), sheet.slice(0, 24).replace(/\s+/g, " "));
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  check("Esc returns to /now", page.url().endsWith("/now") && !(await page.$(".sheet")), page.url());
+
+  await page.click("nav >> text=创作");
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: path.join(out, "flow_switch_mid.jpg"), type: "jpeg", quality: 82 });
+  await page.waitForTimeout(2500);
+  const beacons = await page.$$eval(".beacon", (els) => els.map((e) => e.getAttribute("aria-label")).join(" "));
+  check("nav switches 此刻 → 创作", page.url().endsWith("/create") && beacons.includes("日记"), page.url());
+  await page.click("nav >> text=此刻");
+  await page.waitForTimeout(2800);
+  const back = await page.$$eval(".beacon", (els) => els.map((e) => e.getAttribute("aria-label")).join(" "));
+  check("nav switches 创作 → 此刻", page.url().endsWith("/now") && back.includes("杯垫"), page.url());
+  await page.screenshot({ path: path.join(out, "flow_switch_back.jpg"), type: "jpeg", quality: 82 });
 
   await page.goto(`${base}/create/writing/vol-01`, { waitUntil: "networkidle" });
   await page.waitForSelector(".reader-head h1");
@@ -71,12 +93,14 @@ await run(["--use-angle=metal"], async (page) => {
 });
 
 await run(["--disable-webgl", "--disable-webgl2", "--disable-gpu"], async (page) => {
-  await page.goto(`${base}/create`, { waitUntil: "networkidle" });
-  const ready = await page.waitForSelector(".app.is-ready", { timeout: 10000 }).then(() => true, () => false);
-  check("no-WebGL fallback becomes ready", ready);
-  check("fallback uses <img>", !!(await page.$(".stage-img")));
-  check("fallback still has hotspots", (await page.$$(".beacon")).length > 4);
-  await page.screenshot({ path: path.join(out, "flow_nowebgl.jpg"), type: "jpeg", quality: 82 });
+  for (const scene of ["now", "create"]) {
+    await page.goto(`${base}/${scene}`, { waitUntil: "networkidle" });
+    const ready = await page.waitForSelector(".app.is-ready", { timeout: 10000 }).then(() => true, () => false);
+    check(`no-WebGL fallback becomes ready (${scene})`, ready);
+    check(`fallback uses <img> (${scene})`, !!(await page.$(".stage-img")));
+    check(`fallback still has hotspots (${scene})`, (await page.$$(".beacon")).length > 4);
+    await page.screenshot({ path: path.join(out, `flow_nowebgl_${scene}.jpg`), type: "jpeg", quality: 82 });
+  }
 });
 
 console.log(results.join("\n"));

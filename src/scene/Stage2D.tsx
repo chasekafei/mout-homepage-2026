@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { HOTSPOTS } from "../content/site";
+import { SCENES, type SceneId } from "../content/site";
 import { player } from "../lib/audio";
 import { Compositor, coverFit, type Fit } from "./compositor";
 import {
@@ -10,6 +10,7 @@ import {
 export type ScreenRect = { x: number; y: number; w: number; h: number };
 
 type Props = {
+  scene: SceneId;
   openId: number;
   onOpen: (id: number, origin: ScreenRect) => void;
   onBackground: () => void;
@@ -19,7 +20,8 @@ type Props = {
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const coarse = () => matchMedia("(pointer: coarse)").matches;
 
-export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
+export function Stage2D({ scene, openId, onOpen, onBackground, onReady }: Props) {
+  const HOTSPOTS = SCENES[scene].hotspots;
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const waveCanvas = useRef<HTMLCanvasElement>(null);
@@ -63,8 +65,8 @@ export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
     let cancelled = false;
     setBeautyReady(false);
     live.current.reveal = 0;
-    const stem = beautyUrl(variant, size.w, size.h, devicePixelRatio);
-    loadPasses(variant).then(({ mask, depth, lookup }) => {
+    const stem = beautyUrl(scene, variant, size.w, size.h, devicePixelRatio);
+    loadPasses(scene, variant).then(({ mask, depth, lookup }) => {
       if (cancelled) return;
       comp.current?.setTexture("mask", mask);
       comp.current?.setTexture("depth", depth);
@@ -79,7 +81,7 @@ export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
     }).catch(() => { if (!cancelled) setFallback(true); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant, fallback]);
+  }, [scene, variant, fallback]);
 
   useEffect(() => {
     if (beautyReady && (lookupVariant === variant || passesFailed)) onReady?.();
@@ -141,6 +143,8 @@ export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
     const levels = new Float32Array(28);
     const smooth = new Float32Array(28);
     let last = performance.now();
+    const podcast = HOTSPOTS.findIndex((h) => h.id === "podcast");
+    const wave = SCENE.wave[scene];
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
@@ -165,18 +169,18 @@ export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
       }
 
       const wc = waveCanvas.current;
-      if (wc && lookup) {
+      if (wc && lookup && wave) {
         const ctx = wc.getContext("2d")!;
         const dpr = wc.width / size.w;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, size.w, size.h);
-        const cfg = SCENE.wave[variant];
+        const cfg = wave[variant];
         const shift = parallaxShift(0.33, L.parallax);
         const x0 = (cfg.x0 - shift[0]) * fit.imgW - fit.offX;
         const yc = (cfg.y - shift[1]) * fit.imgH - fit.offY;
         const W = (cfg.x1 - cfg.x0) * fit.imgW, H = cfg.h * fit.imgH;
         const playing = player.levels(levels);
-        const focus = L.hover === 1 || L.open === 1;
+        const focus = (L.hover >= 0 && L.hover === podcast) || (L.open >= 0 && L.open === podcast);
         const n = levels.length;
         for (let i = 0; i < n; i++) {
           const env = Math.sin((i / (n - 1)) * Math.PI) ** 0.7;
@@ -184,7 +188,7 @@ export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
           const target = playing ? 0.12 + levels[i] * 1.1 : still ? 0.25 : idle * (focus ? 2.1 : 1);
           smooth[i] += (target * env - smooth[i]) * (1 - Math.exp(-dt * 14));
         }
-        const alpha = (0.55 + (focus || playing ? 0.4 : 0)) * L.reveal * (1 - L.dim * (L.open === 1 ? 0 : 0.6));
+        const alpha = (0.55 + (focus || playing ? 0.4 : 0)) * L.reveal * (1 - L.dim * (L.open === podcast ? 0 : 0.6));
         ctx.globalCompositeOperation = "lighter";
         ctx.shadowColor = "rgba(64, 232, 205, 0.9)";
         ctx.shadowBlur = 8;
@@ -205,13 +209,13 @@ export function Stage2D({ openId, onOpen, onBackground, onReady }: Props) {
     const vis = () => { if (document.hidden) cancelAnimationFrame(raf); else { last = performance.now(); raf = requestAnimationFrame(frame); } };
     document.addEventListener("visibilitychange", vis);
     return () => { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", vis); };
-  }, [fit, size, beautyReady, lookup, lookupVariant, variant, fallback, regionRect]);
+  }, [fit, size, beautyReady, lookup, lookupVariant, variant, fallback, regionRect, scene]);
 
   const regions = lookupVariant === variant ? lookup?.regions ?? [] : [];
   const hovered = hover >= 0 ? regions[hover] : undefined;
   const label = hovered && openId < 0 ? labelPos(labelRect(hovered, regionRect(hovered), fit), size) : null;
   const touch = coarse();
-  const lqip = `${SCENE.base}/beauty_${variant}_lqip.webp`;
+  const lqip = `${SCENE.base(scene)}/beauty_${variant}_lqip.webp`;
 
   return (
     <div

@@ -1,7 +1,7 @@
 export type StateId = "now" | "create" | "play" | "work" | "depart" | "chat";
 
 export const STATES: { id: StateId; label: string; ready: boolean; teaser: string }[] = [
-  { id: "now", label: "此刻", ready: false, teaser: "此刻场景还在搭：最近在做的产品、正在想的问题，以及两只猫今天的状态。" },
+  { id: "now", label: "此刻", ready: true, teaser: "" },
   { id: "create", label: "创作", ready: true, teaser: "" },
   { id: "play", label: "游戏", ready: false, teaser: "游戏场景还在搭：GBA 婚礼请柬小游戏、FC 与 MD 的童年电视，以及一千多款游戏的存档架。" },
   { id: "work", label: "工作", ready: false, teaser: "工作场景还在搭：AI Agent 空间助手居中，社交、游戏、品牌营销和电子政务的经历围在它身后。" },
@@ -10,11 +10,12 @@ export const STATES: { id: StateId; label: string; ready: boolean; teaser: strin
 ];
 
 export type HotspotId =
-  | "writing" | "podcast" | "products" | "rubik" | "cat_shaojiu" | "cat_xiaoba" | "me" | "books" | "window";
+  | "writing" | "podcast" | "products" | "rubik" | "cat_shaojiu" | "cat_xiaoba" | "me" | "books" | "window"
+  | "project" | "thought";
 
 export type Hotspot = { id: HotspotId; route: string; label: string; hint: string; kind: string };
 
-/** Order matches the mask encoding in tools/scene: R = (index + 1) * 16. */
+/** Order matches the mask encoding in tools/scene/scene_create.py: R = (index + 1) * 16. */
 export const HOTSPOTS: Hotspot[] = [
   { id: "writing", route: "writing", kind: "WRITING", label: "日记与报纸", hint: "写作、Newsletter 和短想法。从《社思现场》开始。" },
   { id: "podcast", route: "podcast", kind: "PODCAST", label: "麦克风", hint: "CrossPod 串台：用你和朋友的声音开一期播客。" },
@@ -27,7 +28,58 @@ export const HOTSPOTS: Hotspot[] = [
   { id: "window", route: "window", kind: "OUTSIDE", label: "窗外", hint: "远程工作之后，我常常一边工作一边出发。" },
 ];
 
-export const hotspotByRoute = (r: string) => HOTSPOTS.find((h) => r === h.route || r.startsWith(h.route + "/"));
+/** Order matches tools/scene/scene_now.py. */
+export const NOW_HOTSPOTS: Hotspot[] = [
+  { id: "project", route: "project", kind: "NOW BUILDING", label: "笔记本上的 MouT.me", hint: "现在在做的，就是你正在看的这个网站。" },
+  { id: "thought", route: "thought", kind: "LATELY", label: "杯垫上的一句话", hint: "最近一直在想的一个问题。" },
+  { id: "me", route: "me", kind: "AI CLONE", label: "MouT.me", hint: "我在写东西。你可以先和我的分身聊聊。" },
+  { id: "cat_shaojiu", route: "cats/shaojiu", kind: "CAT", label: "烧酒", hint: "狸花猫，在窗台上卷成一团晒太阳。" },
+  { id: "cat_xiaoba", route: "cats/xiaoba", kind: "CAT", label: "小八", hint: "英短蓝白，霸占了笔记本旁边的半张桌子。" },
+  { id: "window", route: "window", kind: "OUTSIDE", label: "窗外的街", hint: "远程工作之后，换个地方坐坐也算出发。" },
+];
+
+/** States that have their own 3D room. Every room shares the character, seat and camera. */
+export type SceneId = "now" | "create";
+
+export type SceneDef = {
+  id: SceneId;
+  label: string;
+  hotspots: Hotspot[];
+  /** One line under the scene; `{act}` becomes the hover / tap instruction. */
+  caption: string;
+  /** Pre-rendered 2.5D fallback exists in public/scene/<id>/. */
+  flat: boolean;
+};
+
+export const SCENES: Record<SceneId, SceneDef> = {
+  now: { id: "now", label: "此刻", hotspots: NOW_HOTSPOTS, caption: "最近在做的、在想的，和两只猫今天的样子。{act}", flat: true },
+  create: { id: "create", label: "创作", hotspots: HOTSPOTS, caption: "写作、播客和独立产品。{act}", flat: true },
+};
+
+export const isScene = (s: string): s is SceneId => s in SCENES;
+
+export const hotspotByRoute = (scene: SceneId, r: string) =>
+  SCENES[scene].hotspots.find((h) => r === h.route || r.startsWith(h.route + "/"));
+
+export const NOW = {
+  project: {
+    name: "MouT.me",
+    status: "正在搭第二个场景",
+    oneLine: "一个可以坐进去的个人网站：同一个我、同一个座位，导航换的是房间。",
+    notes: [
+      "房间在 Blender 里程序化建模，Cycles 把光照烘焙进贴图，浏览器里用 three.js 实时渲染。",
+      "每个场景只换环境、灯光和物件，角色的坐姿和镜头永远不变，切换时只有房间在变。",
+      "目前完成了「创作」和「此刻」，接下来是「工作」「游戏」和「出发」。",
+    ],
+  },
+  thought: {
+    q: "AI 让做东西变得这么容易之后，什么才是值得做的？",
+    body: [
+      "以前一个想法从脑子里到能用，中间隔着设计、开发、上线。现在一个人一个周末就能走完。",
+      "门槛没了以后，我发现自己更常问的是：这个东西是为谁做的？它会让谁的一天好一点？",
+    ],
+  },
+};
 
 export type Product = {
   id: string;
@@ -91,14 +143,14 @@ export const CATS = {
   shaojiu: {
     name: "烧酒",
     breed: "狸花猫",
-    spot: "桌子左角",
-    lines: ["深棕色虎斑，白下巴、白爪子。", "在创作场景里，它卷成一团睡在桌子的左角。"],
+    spot: { create: "桌子左角", now: "窗台" },
+    lines: ["深棕色虎斑，白下巴、白爪子。", "在创作场景里，它卷成一团睡在桌子的左角；在咖啡馆里，它占了窗台上最晒的那一块。"],
   },
   xiaoba: {
     name: "小八",
     breed: "英短蓝白",
-    spot: "麦克风旁边",
-    lines: ["蓝灰色的背，白色的胸口和爪子。", "在创作场景里，它摊开躺在麦克风旁边，正好压着一块阳光。"],
+    spot: { create: "麦克风旁边", now: "笔记本旁边" },
+    lines: ["蓝灰色的背，白色的胸口和爪子。", "在创作场景里，它摊开躺在麦克风旁边，正好压着一块阳光；在咖啡馆里，它直接占了笔记本旁边的半张桌子。"],
   },
 } as const;
 

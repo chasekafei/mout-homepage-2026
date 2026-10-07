@@ -6,19 +6,25 @@ import sharp from "sharp";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const P = (...p) => path.join(ROOT, ...p);
+// node build-assets.mjs [task] [scene]; scene tasks default to every scene that has source files.
 const only = process.argv[2];
+const SCENES = process.argv[3] ? [process.argv[3]] : ["now", "create"];
 
 async function exists(f) {
   try { await stat(f); return true; } catch { return false; }
 }
 
 async function scene() {
-  const from = P(".cache/scene-src");
-  const dir = P("public/scene/create");
-  await mkdir(dir, { recursive: true });
+  for (const id of SCENES) await scene2d(id);
+}
+
+async function scene2d(id) {
+  const from = P(".cache/scene-src", id);
+  const dir = P("public/scene", id);
   for (const cam of ["desktop", "mobile"]) {
     const src = path.join(from, `beauty_${cam}.png`);
     if (!(await exists(src))) { console.warn(`skip ${src}`); continue; }
+    await mkdir(dir, { recursive: true });
     await copyFile(path.join(from, `mask_${cam}.png`), path.join(dir, `mask_${cam}.png`));
     await sharp(path.join(from, `depth_${cam}.png`)).resize({ width: cam === "desktop" ? 960 : 540 }).blur(0.8)
       .webp({ quality: 88 }).toFile(path.join(dir, `depth_${cam}.webp`));
@@ -29,7 +35,7 @@ async function scene() {
       await img.clone().avif({ quality: 62, effort: 5 }).toFile(path.join(dir, `beauty_${cam}_${w}.avif`));
     }
     await sharp(src).resize({ width: 48 }).blur(0.6).webp({ quality: 60 }).toFile(path.join(dir, `beauty_${cam}_lqip.webp`));
-    console.log(`scene ${cam}: ${widths.join("/")}`);
+    console.log(`scene ${id} ${cam}: ${widths.join("/")}`);
   }
 }
 
@@ -90,12 +96,19 @@ async function legacy() {
 }
 
 async function scene3d() {
-  const from = P(".cache/bake");
-  const dir = P("public/scene/create/3d");
+  for (const id of SCENES) await publish3d(id);
+}
+
+async function publish3d(id) {
+  const from = P(".cache/bake", id);
+  const dir = P("public/scene", id, "3d");
+  if (!(await exists(path.join(from, "room.json")))) { console.warn(`skip ${id}: no bake in ${from}`); return; }
   await mkdir(dir, { recursive: true });
+  console.log(`scene3d ${id}`);
   const { execFileSync } = await import("node:child_process");
   execFileSync(P("node_modules/.bin/gltfpack"), ["-i", path.join(from, "room.glb"), "-o", path.join(dir, "room.glb"),
-    "-cc", "-kn", "-ke", "-kv", "-vp", "16", "-vtf", "-vc", "8"], { stdio: "inherit" });
+    // -cc garbles thin stacked layers (laptop deck, screen); 16-bit positions step ~1 mm over the street's bounds
+    "-c", "-kn", "-ke", "-kv", "-vpf", "-vtf", "-vc", "8"], { stdio: "inherit" });
   // atlas and backdrop hold encoded radiance: keep chroma at full resolution
   for (const [name, widths] of [["atlas", [4096, 2048]], ["backdrop", [2560, 1600]]]) {
     const src = path.join(from, `${name}.png`);
