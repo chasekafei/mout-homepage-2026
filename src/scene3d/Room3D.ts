@@ -483,8 +483,8 @@ export class Room3D {
   drag(dx: number, dy: number) {
     const c = this.meta.cameras[this.variant];
     const k = 0.11;
-    this.orbit.ty = Math.max(-c.yaw, Math.min(c.yaw, this.orbit.ty + dx * k));
-    this.orbit.tp = Math.max(-c.pitch, Math.min(c.pitch, this.orbit.tp + dy * k));
+    this.orbit.ty = Math.max(-c.yaw, Math.min(c.yaw, this.orbit.ty - dx * k));
+    this.orbit.tp = Math.max(-c.pitch, Math.min(c.pitch, this.orbit.tp - dy * k));
   }
 
   /** Small look-around from the hover position, in [-1, 1]. */
