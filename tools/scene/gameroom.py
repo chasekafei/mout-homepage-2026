@@ -13,6 +13,7 @@ from pathlib import Path
 
 import bpy
 import numpy as np
+from mathutils import Vector
 
 import blib as B
 import stage
@@ -30,7 +31,9 @@ CRT_X, CRT_Y0 = 0.05, CAB[2] + 0.02                         # screen centre x, f
 ARCH_X0, ARCH_X1, ARCH_Y0 = LEFT_X + 0.02, -0.5, FRONT_Y - 0.3   # archive on the front wall
 ARCH_SIDE_Y0 = 0.86                                              # archive along the left wall
 CRT_W, CRT_H = 0.66, 0.54
+CRT_TOP = 0.5 * CRT_H + 0.44 * CRT_H - 0.004   # flat top of the tapered back, above the cabinet
 SHELF_DZ, SHELF_N = 0.22, 9
+LAMP = (0.35, 0.2)                             # ceiling lamp x, y
 LIBRARY = Path(__file__).parent / "data" / "game_library.json"
 
 root = None
@@ -142,7 +145,12 @@ def build_shell():
     B.box_minmax("skirt_front", (LEFT_X, FRONT_Y - 0.015, 0), (RIGHT_X, FRONT_Y, 0.08), sk, bevel=0.002, parent=r)
     B.box_minmax("skirt_left", (LEFT_X, WIN_Y1, 0), (LEFT_X + 0.015, FRONT_Y, 0.08), sk, bevel=0.002, parent=r)
     rug = B.mat_image("game_rug", "game_rug.png", rough=0.95, spec=0.1)
-    B.box_minmax("rug", (-0.9, -0.9, 0.0), (1.2, 1.12, 0.01), rug, bevel=0.003, parent=r)
+    B.plane("rug", 2.1, 2.02, (0.15, 0.11, 0.006), (-90, 0, 0), rug, parent=r)
+    # flush ceiling lamp, already on: the sun alone does not reach the far side of the room
+    B.cylinder("lamp_base", 0.12, 0.02, (LAMP[0], LAMP[1], CEIL - 0.01), material=B.mat("lamp_base", srgb("#e9e4da"), 0.5),
+               verts=32, parent=r)
+    B.cylinder("lamp_shade", 0.2, 0.07, (LAMP[0], LAMP[1], CEIL - 0.055), material=glow("lamp_shade", "#ffe2b8", 3.0),
+               verts=48, bevel=0.02, parent=r, r_top=0.16)
 
 
 # ---------------------------------------------------------------- seat
@@ -202,8 +210,9 @@ def build_tv():
     sw_, sh_ = 0.53, 0.4
     sx = CRT_X - 0.03
     B.box("crt_front", (W, 0.12, H), (CRT_X, CRT_Y0 + 0.06, zc), material=shell, bevel=0.025, parent=tv)
-    B.tbox("crt_back", (CRT_X, CRT_Y0 + 0.1, zc + 0.005), (CRT_X, y1 - 0.02, zc + 0.02), (W * 0.92, H * 0.88),
-           (W * 0.5, H * 0.5), up=(0, 0, 1), material=shell, bevel=0.03, parent=tv)
+    # the back tapers at the sides and bottom but keeps a flat top: 烧酒 sleeps on it
+    B.tbox("crt_back", (CRT_X, CRT_Y0 + 0.1, zc + 0.005), (CRT_X, y1 - 0.02, zc + 0.44 * H - 0.3 * H), (W * 0.92, H * 0.88),
+           (W * 0.62, H * 0.6), up=(0, 0, 1), material=shell, bevel=0.02, parent=tv)
     B.box("crt_glass_rim", (sw_ + 0.03, 0.012, sh_ + 0.03), (sx, CRT_Y0 - 0.002, zc + 0.02), material=graphite_dark(),
           bevel=0.012, parent=tv)
     B.superellipsoid("crt_screen", (sw_, 0.02, sh_), (sx, CRT_Y0 - 0.006, zc + 0.02), material=B.mat_image(
@@ -268,13 +277,11 @@ def build_handhelds():
     for sx in (-1, 1):
         B.box(f"hh_bracket{sx}", (0.02, 0.12, 0.08), (sx * 0.42, 0.02, -0.065), material=graphite(), bevel=0.003, parent=hr)
     items = [
-        ("gb", 0.09, 0.148, "#c9c6bf", ("#9bbc0f", 0.06, 0.054, 0.035)),
-        ("nds", 0.133, 0.15, "#eceae6", ("#3a3f48", 0.08, 0.06, 0.035)),
         ("psp", 0.17, 0.074, "#17181b", ("#22324a", 0.11, 0.062, 0.0)),
         ("psv", 0.182, 0.083, "#1d1f24", ("#2a3b55", 0.12, 0.068, 0.0)),
         ("swlite", 0.208, 0.091, "#2fc9ab", ("#15171b", 0.12, 0.068, 0.0)),
     ]
-    gap = 0.045
+    gap = 0.09
     total = sum(w for _, w, *_ in items) + gap * (len(items) - 1)
     x = -total / 2
     for name, w, h, col, (scol, sw_, sh_, sdz) in items:
@@ -286,9 +293,6 @@ def build_handhelds():
               parent=it)
         B.box(f"hh_{name}_screen", (sw_, 0.002, sh_), (0, -0.012, h / 2 + 0.01 + sdz), material=B.mat(
             f"hh_scr_{name}", srgb(scol), 0.2, emission=srgb(scol), estr=0.6), bevel=0, parent=it)
-        if name == "nds":
-            B.box("hh_nds_screen2", (0.08, 0.002, 0.06), (0, -0.012, 0.045), material=B.mat(
-                "hh_scr_nds2", srgb("#3a3f48"), 0.2, emission=srgb("#3a3f48"), estr=0.6), bevel=0, parent=it)
         if name == "swlite":
             for sx in (-1, 1):
                 B.cylinder(f"hh_sw_stick{sx}", 0.008, 0.006, (sx * 0.083, -0.013, h / 2 + 0.03 * (1 if sx < 0 else -1) + 0.01),
@@ -507,13 +511,23 @@ def build_lights():
         o.location = loc
         o.rotation_euler = (math.radians(90), 0, 0)
     fill = bpy.data.lights.new("fill", "AREA")
-    fill.energy = 130
-    fill.size = 3.0
+    fill.energy = 55
+    fill.size = 1.6
     fill.color = (1.0, 0.9, 0.82)
     f = bpy.data.objects.new("fill", fill)
     B.link(f)
-    f.location = (0.9, -1.7, 2.35)
-    stage.look_at(f, (0, 1.6, 0.8))
+    f.parent = root
+    f.location = (1.4, -1.6, 2.3)
+    f.rotation_euler = (Vector((0.0, 1.1, 0.75)) - Vector(f.location)).to_track_quat("-Z", "Y").to_euler()
+    lamp = bpy.data.lights.new("ceiling_lamp", "AREA")
+    lamp.shape = "DISK"
+    lamp.size = 0.5
+    lamp.energy = 70
+    lamp.color = (1.0, 0.76, 0.52)
+    lo = bpy.data.objects.new("ceiling_lamp", lamp)
+    B.link(lo)
+    lo.parent = root
+    lo.location = (LAMP[0], LAMP[1], CEIL - 0.1)
     pl = bpy.data.lights.new("window_portal", "AREA")
     pl.shape = "RECTANGLE"
     pl.size, pl.size_y = WIN_Y1 - WIN_Y0, WIN_Z1 - WIN_Z0
@@ -529,7 +543,7 @@ def build_lights():
     po.rotation_euler = (math.radians(90), 0, math.radians(90))
 
 
-SUN_STRENGTH = 13.0
+SUN_STRENGTH = 16.0
 
 
 def SUN_DIR():
@@ -564,5 +578,5 @@ def build_all():
                          (0.02, TABLE[3] + 0.06, 0.15), (-0.04, CAB[2] - 0.06, 0.01), (fcx + 0.05, CAB[2] + 0.02, 0.2),
                          (fcx + 0.05, CAB[2] + 0.1, 0.33)], root)
     # 烧酒 on the warm CRT, 小八 stretched out on the table
-    C.build_shaojiu(tv, (CRT_X + 0.02, CRT_Y0 + 0.22, CAB[4] + CRT_H), 0).scale = (0.58,) * 3
+    C.build_shaojiu(tv, (CRT_X + 0.02, CRT_Y0 + 0.25, CAB[4] + CRT_TOP), 0).scale = (0.58,) * 3
     C.build_xiaoba(tb, (0.52, 0.66, TABLE[4]), -165).scale = (0.45,) * 3
