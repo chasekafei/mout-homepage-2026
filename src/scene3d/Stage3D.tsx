@@ -6,8 +6,10 @@ import { Room3D, type Variant } from "./Room3D";
 
 type Props = {
   scene: SceneId;
-  /** Rooms to fetch in the background once the first one is on screen. */
-  preload: SceneId[];
+  /** Which view outside the room (出发: the destination). */
+  view?: string;
+  /** Room keys ("play", "depart:nagoya") to fetch in the background once the first one is on screen. */
+  preload: string[];
   openId: number;
   onOpen: (id: number, origin: ScreenRect) => void;
   onBackground: () => void;
@@ -17,14 +19,17 @@ type Props = {
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const coarse = () => matchMedia("(pointer: coarse)").matches;
-const lqip = (scene: SceneId, v: Variant) => SCENES[scene].flat ? `url(/scene/${scene}/beauty_${v}_lqip.webp)` : undefined;
+const lqip = (scene: SceneId, v: Variant, view?: string) =>
+  SCENES[scene].flat ? `url(/scene/${scene}${view ? `/${view}` : ""}/beauty_${v}_lqip.webp)` : undefined;
+const roomKey = (scene: SceneId, view?: string) => (view ? `${scene}:${view}` : scene);
 const FRAME: Record<Variant, { aspect: number; focus: [number, number] }> = {
   desktop: { aspect: 16 / 9, focus: [0.47, 0.56] },
   mobile: { aspect: 9 / 16, focus: [0.56, 0.5] },
 };
 const idle = (fn: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1500));
 
-export function Stage3D({ scene, preload, openId, onOpen, onBackground, onReady, onFail }: Props) {
+export function Stage3D({ scene, view, preload, openId, onOpen, onBackground, onReady, onFail }: Props) {
+  const key = roomKey(scene, view);
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const waveCanvas = useRef<HTMLCanvasElement>(null);
@@ -36,13 +41,14 @@ export function Stage3D({ scene, preload, openId, onOpen, onBackground, onReady,
   const [loaded, setLoaded] = useState(false);
   /** The room actually on screen; lags `scene` while the next room loads and fades in. */
   const [shown, setShown] = useState<SceneId>(scene);
+  const [shownView, setShownView] = useState(view);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(-1);
   const [dragging, setDragging] = useState(false);
   const HOTSPOTS = SCENES[shown].hotspots;
 
   const live = useRef({
-    hover: -1, hoverAmt: 0, lastHover: -1, dim: 0, reveal: 0, open: -1, t0: performance.now(), want: scene as string, busy: false,
+    hover: -1, hoverAmt: 0, lastHover: -1, dim: 0, reveal: 0, open: -1, t0: performance.now(), want: key, busy: false,
     down: null as null | { x: number; y: number; lx: number; ly: number; moved: boolean; id: number },
   });
 
@@ -57,11 +63,12 @@ export function Stage3D({ scene, preload, openId, onOpen, onBackground, onReady,
     try { r = new Room3D(canvas.current!); } catch { onFail(); return; }
     room.current = r;
     let cancelled = false;
-    r.show(scene, { instant: true }).then(() => {
+    r.show(key, { instant: true }).then(() => {
       if (cancelled) return;
       const s = host.current!.getBoundingClientRect();
       r.setView(s.width / s.height < 0.9 ? "mobile" : "desktop", s.width, s.height, pixelRatio());
       setShown(scene);
+      setShownView(view);
       setLoaded(true);
     }).catch((e) => { if (!cancelled) { console.error(e); onFail(); } });
     return () => { cancelled = true; r.dispose(); room.current = null; };
@@ -70,18 +77,18 @@ export function Stage3D({ scene, preload, openId, onOpen, onBackground, onReady,
 
   useEffect(() => {
     const r = room.current;
-    if (!loaded || !r || r.current === scene) return;
+    if (!loaded || !r || r.current === key) return;
     let cancelled = false;
-    live.current.want = scene;
+    live.current.want = key;
     live.current.busy = true;
     setBusy(true);
     setHoverId(-1);
-    r.show(scene, { still: reducedMotion() }).then((ok) => {
-      if (!cancelled && ok) setShown(scene);
+    r.show(key, { still: reducedMotion() }).then((ok) => {
+      if (!cancelled && ok) { setShown(scene); setShownView(view); }
     }).catch((e) => { console.error(e); live.current.want = r.current; });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, scene]);
+  }, [loaded, key]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -258,7 +265,7 @@ export function Stage3D({ scene, preload, openId, onOpen, onBackground, onReady,
     <div
       ref={host}
       className={`stage stage-3d ${hover >= 0 ? "is-pointing" : ""} ${dragging ? "is-dragging" : ""} ${busy ? "is-busy" : ""}`}
-      style={{ backgroundImage: lqip(shown, variant), backgroundSize: `${FW}px ${FH}px`, backgroundPosition: `${-offX}px ${-offY}px` }}
+      style={{ backgroundImage: lqip(shown, variant, shownView), backgroundSize: `${FW}px ${FH}px`, backgroundPosition: `${-offX}px ${-offY}px` }}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}

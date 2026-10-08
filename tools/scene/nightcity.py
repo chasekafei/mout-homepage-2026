@@ -227,6 +227,16 @@ SKIES = {
     # horizon, lower sky, zenith, ambient seen by everything but camera rays, star strength
     "night": ("#4a4a5c", "#1a2238", "#070a16", "#0d1426", 0.6),
     "dusk": ("#ffb07a", "#e89a9a", "#5d7fc4", "#7a6c66", 0.0),
+    # 出发: one clear sky per destination
+    "nagoya": ("#e9e4da", "#a8c6e4", "#4f88c9", "#8d9cb0", 0.0),
+    "tbilisi": ("#f0e2cc", "#b9cbe0", "#5a8cc8", "#9a9fae", 0.0),
+    "batumi": ("#e6ecef", "#a9cbe6", "#4a86c8", "#8fa2b6", 0.0),
+    "sayram": ("#dfeaf2", "#8cbde8", "#2c6cc4", "#8ea6c4", 0.0),
+    "doha": ("#f2e3cc", "#dcd6c8", "#93b2cc", "#b0a796", 0.0),
+    "hokkaido": ("#e8eef2", "#a8cdeb", "#4f8fd6", "#90a6bf", 0.0),
+    "fukuoka": ("#e9e6de", "#acc9e4", "#4e88c9", "#8d9cb0", 0.0),
+    "dalian": ("#e4e9ec", "#a6c4e0", "#5288c4", "#8c9bb0", 0.0),
+    "changsha": ("#ece2d2", "#c6ccd0", "#7c9cc0", "#9c9a98", 0.0),
 }
 
 

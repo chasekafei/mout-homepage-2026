@@ -61,7 +61,7 @@ def build_cameras():
         c.lens = lens
         c.sensor_width = 36
         c.clip_start = 0.05
-        c.clip_end = 4000
+        c.clip_end = 40000
         o = bpy.data.objects.new(name, c)
         B.link(o)
         o.location = loc

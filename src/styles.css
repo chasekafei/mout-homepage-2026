@@ -395,6 +395,38 @@ a { color: inherit; }
 .gba-frame { margin: 16px 0; aspect-ratio: 4 / 3; max-height: 70vh; border-radius: 12px; overflow: hidden; background: #111; }
 .gba-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
 
+/* depart */
+.depart > p:not(.lede):not(.meta) { color: var(--ink-2); }
+.depart .muted { color: var(--ink-3); }
+.dest-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dest-list button {
+  position: relative; display: grid; gap: 1px; width: 100%; padding: 10px 12px 10px 30px; border: 0; border-radius: 10px;
+  background: var(--paper-2); font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.dest-list button::before { content: ""; position: absolute; left: 12px; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.dest-list button:hover { background: var(--paper-3); }
+.dest-list button.is-current { background: #2f88ff; color: #fff; }
+.dest-list button.is-current::before { background: #fff; }
+.dest-list button.is-current .hover-kind, .dest-list button.is-current span { color: #ffffffcc; }
+.dest-list button > span:last-of-type { font-size: 13px; color: var(--ink-2); }
+.dest-list .tag { position: absolute; left: auto; right: 10px; top: 10px; bottom: auto; font-style: normal; }
+.trip-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 16px 0; }
+.trip-photos img { width: 100%; height: auto; border-radius: 10px; display: block; }
+.matches { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.matches li { display: grid; gap: 2px; padding: 10px 14px; border-radius: 10px; background: linear-gradient(90deg, #d8f3ec, var(--paper-2)); }
+.matches li .chip { justify-self: start; margin-top: 6px; }
+.stamps { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.stamp {
+  display: grid; gap: 2px; justify-items: center; padding: 14px 8px; border: 2px dashed #5b1f2a88; border-radius: 12px;
+  background: none; font: inherit; color: #5b1f2a; text-align: center; cursor: pointer; transition: transform 0.2s ease;
+}
+.stamp:hover { transform: scale(1.05); }
+.stamp strong { font-size: 16px; }
+.stamp span { font: 11px/1.2 var(--mono); letter-spacing: 0.08em; }
+.stamp em { font-style: normal; font-size: 11.5px; opacity: 0.7; }
+.stamp.is-plain { cursor: default; border-color: var(--line); color: var(--ink-3); }
+.stamp.is-plain:hover { transform: none; }
+
 /* index */
 .index-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .index-list a { display: grid; gap: 1px; padding: 10px 12px; border-radius: 10px; background: var(--paper-2); text-decoration: none; }

@@ -120,7 +120,7 @@ export function BooksPanel({ go }: { go: Go }) {
   );
 }
 
-export function WindowPanel() {
+export function WindowPanel({ go }: { go: Go }) {
   const places = ["新疆 · 北疆大环线", "格鲁吉亚 · 巴统", "日本 · 福冈 / 北海道 / 名古屋", "卡塔尔 · 多哈", "香港 · 澳门", "成都 · 重庆 · 大连 · 长沙"];
   return (
     <div className="window">
@@ -128,7 +128,9 @@ export function WindowPanel() {
         远程工作的那几年，我大部分时间在家办公，也常常带着电脑出发。很多次出门，是为了去现场看王楚钦和孙颖莎的比赛。
       </p>
       <ul className="places">{places.map((p) => <li key={p}>{p}</li>)}</ul>
-      <p className="meta">“出发”场景还在搭：同一个座位，车窗外一次只换一个目的地。</p>
+      <div className="row-actions">
+        <button type="button" className="cta" onClick={() => go("/depart")}>去「出发」：坐进驾驶座</button>
+      </div>
     </div>
   );
 }

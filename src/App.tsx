@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PODCAST, PRODUCTS, SCENES, STATES, WORK, hotspotByRoute, isScene, type SceneId, type StateId } from "./content/site";
+import { PODCAST, PRODUCTS, SCENES, STATES, TRIPS, WORK, hotspotByRoute, isScene, sceneView, type DestId, type SceneId, type StateId } from "./content/site";
 import { player, usePlayer } from "./lib/audio";
 import { navigate, parsePath, usePath } from "./lib/router";
 import { SceneStage, type ScreenRect } from "./scene/SceneStage";
@@ -10,6 +10,7 @@ import { ProductsPanel } from "./panels/ProductsPanel";
 import { ProjectPanel, ThoughtPanel } from "./panels/NowPanels";
 import { WorkPanel } from "./panels/WorkPanels";
 import { PlayPanel } from "./panels/PlayPanels";
+import { CinemaPanel, NavPanel, PassportPanel, PingpongPanel, TripPanel } from "./panels/DepartPanels";
 import { AboutPanel, BooksPanel, CatsPanel, ChatPanel, IndexPanel, LegacyPanel, WindowPanel } from "./panels/MiscPanels";
 
 type View = { key: string; kind: string; title: string; hotspot: number; side?: "right"; back?: string; wide?: boolean; body: JSX.Element } | null;
@@ -25,6 +26,11 @@ export function App() {
   const lastScene = useRef<SceneId>(HOME);
   if (isScene(state) && ready(state)) lastScene.current = state;
   const scene = lastScene.current;
+  // 出发 keeps the destination last driven to; /depart/nav/<dest> drives somewhere else.
+  const lastDest = useRef<DestId>(TRIPS[0].id);
+  const picked = state === "depart" && rest.startsWith("nav/") ? TRIPS.find((t) => t.id === rest.slice(4)) : undefined;
+  if (picked) lastDest.current = picked.id;
+  const view = sceneView(scene, lastDest.current);
   const [origin, setOrigin] = useState<ScreenRect | null>(null);
   const [toast, setToast] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
@@ -53,12 +59,12 @@ export function App() {
   const go = useCallback((to: string) => navigate(to), []);
   const close = useCallback(() => navigate(`/${scene}`), [scene]);
   const onReady = useCallback(() => setLoaded(true), []);
-  const view = resolveView(scene, state, rest, go);
+  const panel = resolveView(scene, state, rest, go, lastDest.current);
   const def = SCENES[scene];
 
   useEffect(() => {
-    document.title = view ? `${view.title} · MouT.me` : `MouT.me · ${def.label}`;
-  }, [view?.title, def.label]);
+    document.title = panel ? `${panel.title} · MouT.me` : `MouT.me · ${def.label}`;
+  }, [panel?.title, def.label]);
 
   const onOpen = useCallback((id: number, rect: ScreenRect) => {
     setOrigin(rect);
@@ -73,7 +79,7 @@ export function App() {
   };
 
   const center = origin ? origin.x + origin.w / 2 : vw;
-  const side = vw < 760 ? "bottom" : view?.side ?? (center > vw * 0.55 ? "left" : "right");
+  const side = vw < 760 ? "bottom" : panel?.side ?? (center > vw * 0.55 ? "left" : "right");
   const activeState: StateId = state === "chat" ? "chat" : scene;
   const act = touch ? "点一下场景里的东西打开。" : "移动鼠标看看场景里的东西，点一下打开。";
 
@@ -100,27 +106,27 @@ export function App() {
       </header>
 
       <main className="scene" aria-label={`${def.label}场景：场景里的物件都可以打开`}>
-        <SceneStage scene={scene} openId={view ? view.hotspot : -1} onOpen={onOpen} onBackground={() => view && close()} onReady={onReady} />
+        <SceneStage scene={scene} view={view} openId={panel ? panel.hotspot : -1} onOpen={onOpen} onBackground={() => panel && close()} onReady={onReady} />
       </main>
 
-      <footer className="caption" hidden={!!view && side !== "bottom"}>
+      <footer className="caption" hidden={!!panel && side !== "bottom"}>
         <p><strong>{def.label}</strong>　{def.caption.replace("{act}", act)}</p>
         <button type="button" className="chip" onClick={() => { setOrigin(null); navigate(`/${scene}/index`); }}>内容目录</button>
         <NowPlaying />
       </footer>
 
-      {view && (
+      {panel && (
         <Sheet
-          key={view.key}
+          key={panel.key}
           side={side}
           origin={origin}
-          kind={view.kind}
-          title={view.title}
-          wide={view.wide}
+          kind={panel.kind}
+          title={panel.title}
+          wide={panel.wide}
           onClose={close}
-          onBack={view.back !== undefined ? () => navigate(view.back!) : undefined}
+          onBack={panel.back !== undefined ? () => navigate(panel.back!) : undefined}
         >
-          {view.body}
+          {panel.body}
         </Sheet>
       )}
 
@@ -149,7 +155,7 @@ function NowPlaying() {
   );
 }
 
-function resolveView(scene: SceneId, state: string, rest: string, go: (to: string) => void): View {
+function resolveView(scene: SceneId, state: string, rest: string, go: (to: string) => void, dest: DestId): View {
   const list = SCENES[scene].hotspots;
   const me = list.findIndex((h) => h.id === "me");
   const chat: View = { key: "chat", kind: "AI CLONE", title: "和我聊聊", hotspot: me, side: "right", body: <ChatPanel /> };
@@ -188,8 +194,23 @@ function resolveView(scene: SceneId, state: string, rest: string, go: (to: strin
         : { key: "me", kind: h.kind, title: "关于 MouT.me", hotspot: id, side: "right", body: <AboutPanel go={go} /> };
     case "books":
       return { key: "books", kind: h.kind, title: "四个动作", hotspot: id, body: <BooksPanel go={go} /> };
-    case "window":
-      return { key: "window", kind: h.kind, title: "窗外", hotspot: id, body: <WindowPanel /> };
+    case "window": {
+      if (scene !== "depart") return { key: "window", kind: h.kind, title: "窗外", hotspot: id, body: <WindowPanel go={go} /> };
+      const t = TRIPS.find((x) => x.id === dest)!;
+      return { key: `trip-${t.id}`, kind: t.en, title: t.name, hotspot: id, body: <TripPanel id={t.id} go={go} /> };
+    }
+    case "nav": {
+      const t = TRIPS.find((x) => x.id === tail);
+      return t
+        ? { key: `trip-${t.id}`, kind: t.en, title: t.name, hotspot: id, back: "/depart/nav", body: <TripPanel id={t.id} go={go} /> }
+        : { key: "nav", kind: h.kind, title: "目的地", hotspot: id, body: <NavPanel current={dest} go={go} /> };
+    }
+    case "pingpong":
+      return { key: "pingpong", kind: h.kind, title: "观赛清单", hotspot: id, body: <PingpongPanel go={go} /> };
+    case "cinema":
+      return { key: "cinema", kind: h.kind, title: "一个人的电影院", hotspot: id, body: <CinemaPanel /> };
+    case "passport":
+      return { key: "passport", kind: h.kind, title: "护照", hotspot: id, body: <PassportPanel go={go} /> };
     case "project":
       return { key: "project", kind: h.kind, title: "现在在做：MouT.me", hotspot: id, body: <ProjectPanel go={go} /> };
     case "thought":

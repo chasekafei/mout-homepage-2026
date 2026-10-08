@@ -26,6 +26,8 @@ export type Meta = {
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export const sceneBase = (id: string) => `/scene/${id}/3d`;
+/** "depart:nagoya" = the 出发 room with the Nagoya backdrop; plain ids use the room's only backdrop. */
+const splitKey = (key: string) => { const [id, view = ""] = key.split(":"); return [id, view] as const; };
 /** Where the design frame is anchored when the viewport crops it (frame uv). */
 const FOCUS: Record<Variant, [number, number]> = { desktop: [0.47, 0.56], mobile: [0.56, 0.5] };
 const BACKDROP_DIST = 40;
@@ -36,6 +38,8 @@ const REFL_LEVELS = 3;
 const FADE = { blocks: 1.1, plain: 0.25 };
 /** GPU-resident rooms (current, outgoing, one preloaded). */
 const RESIDENT = 3;
+/** Backdrops kept on the GPU per room with several views. */
+const RESIDENT_VIEWS = 3;
 const DEG = Math.PI / 180;
 
 const FULLSCREEN_VS = `precision highp float;
@@ -325,7 +329,15 @@ type Room = {
   scene: THREE.Scene;
   /** Everything renderable; mirrored about each glossy plane for the reflection passes. */
   world: THREE.Group;
+  /** The backdrop on screen, one of `backdrops`. */
   backdrop: THREE.Mesh | null;
+  view: string;
+  /** Loaded backdrops by view, least recently shown first. */
+  backdrops: Map<string, THREE.Mesh>;
+  loading: Map<string, Promise<void>>;
+  /** Builds the material of a backdrop added later. */
+  backdropMat: (tex: THREE.Texture) => THREE.RawShaderMaterial;
+  backdropGeo: THREE.BufferGeometry | null;
   mats: THREE.RawShaderMaterial[];
   lut: THREE.Data3DTexture;
   textures: THREE.Texture[];
@@ -397,43 +409,59 @@ export class Room3D {
 
   /** Metadata of the room on screen (camera, hotspots, markers). */
   get meta() { return this.cur!.meta; }
-  get current() { return this.cur?.id ?? ""; }
+  get current() { return this.cur ? (this.cur.view ? `${this.cur.id}:${this.cur.view}` : this.cur.id) : ""; }
   get transitioning() { return this.prev !== null; }
 
-  /** Fetch, decode and upload a room without showing it. */
-  preload(id: string) { return this.room(id).then(() => undefined); }
+  /** Fetch, decode and upload a room (and the backdrop of its view) without showing it. */
+  async preload(key: string) {
+    const [id, view] = splitKey(key);
+    const room = await this.room(id, view);
+    if (view) await this.backdropFor(room, view);
+  }
 
   /**
    * Put a room on screen; with a room already showing, the change runs as a transition.
    * Resolves false when a later call superseded this one before its room finished loading.
    */
-  async show(id: string, opts: { instant?: boolean; still?: boolean } = {}) {
-    this.wanted = id;
-    const room = await this.room(id);
-    if (this.wanted !== id) return false;
+  async show(key: string, opts: { instant?: boolean; still?: boolean } = {}) {
+    this.wanted = key;
+    const [id, view] = splitKey(key);
+    const room = await this.room(id, view);
+    if (view) await this.backdropFor(room, view).catch((e) => console.warn(e));
+    if (this.wanted !== key) return false;
     const p = this.rooms.get(id)!;
     this.rooms.delete(id);
     this.rooms.set(id, p);
-    if (this.cur === room) return true;
-    if (!this.cur || opts.instant) {
+    if (this.cur === room && room.view === view) return true;
+    // a new view of the room on screen fades out of a snapshot that still holds the old backdrop
+    const outgoing = this.cur === room ? { ...room } : this.cur;
+    const next = room.backdrops.get(view);
+    if (next) {
+      room.backdrop = next;
+      room.view = view;
+      room.backdrops.delete(view);
+      room.backdrops.set(view, next);
+    }
+    if (!outgoing || opts.instant) {
       this.prev = null;
       this.fade = 1;
     } else {
-      this.prev = this.cur;
+      this.prev = outgoing;
       this.fade = 0;
       this.blocks = !opts.still;
       this.fadeDur = opts.still ? FADE.plain : FADE.blocks;
     }
     this.cur = room;
     this.evict();
+    this.trimViews(room);
     this.updateCamera();
     return true;
   }
 
-  private room(id: string) {
+  private room(id: string, view = "") {
     let p = this.rooms.get(id);
     if (!p) {
-      p = this.build(id);
+      p = this.build(id, view);
       this.rooms.set(id, p);
       p.catch(() => this.rooms.delete(id));
     }
@@ -451,19 +479,64 @@ export class Room3D {
     }
   }
 
-  private async build(id: string): Promise<Room> {
+  /** Load the backdrop of another view of a room, hidden until shown. */
+  private backdropFor(room: Room, view: string) {
+    if (room.backdrops.has(view)) return Promise.resolve();
+    let p = room.loading.get(view);
+    if (!p) {
+      p = (async () => {
+        if (!room.backdropGeo) return;
+        const big = this.bigTextures();
+        const bmp = await image(`${sceneBase(room.id)}/backdrop_${view}_${big ? 2560 : 1600}`);
+        if (this.disposed) return;
+        const tex = this.texture(bmp);
+        room.textures.push(tex);
+        this.renderer.initTexture(tex);
+        const mesh = new THREE.Mesh(room.backdropGeo, room.backdropMat(tex));
+        mesh.frustumCulled = false;
+        mesh.visible = false;
+        room.world.add(mesh);
+        room.backdrops.set(view, mesh);
+      })().finally(() => room.loading.delete(view));
+      room.loading.set(view, p);
+    }
+    return p;
+  }
+
+  /** Drop the least recently shown backdrops of a room beyond RESIDENT_VIEWS. */
+  private trimViews(room: Room) {
+    const keep = new Set([room.backdrop, this.prev?.backdrop]);
+    for (const [view, mesh] of [...room.backdrops]) {
+      if (room.backdrops.size <= RESIDENT_VIEWS) break;
+      if (keep.has(mesh)) continue;
+      room.backdrops.delete(view);
+      room.world.remove(mesh);
+      const m = mesh.material as THREE.RawShaderMaterial;
+      const t = m.uniforms.uMap.value as THREE.Texture;
+      room.mats.splice(room.mats.indexOf(m), 1);
+      room.textures.splice(room.textures.indexOf(t), 1);
+      m.dispose();
+      t.dispose();
+    }
+  }
+
+  private bigTextures() {
+    return Math.max(screen.width, screen.height) * Math.min(devicePixelRatio, 2) > 1600 && this.renderer.capabilities.maxTextureSize >= 4096;
+  }
+
+  private async build(id: string, view: string): Promise<Room> {
     const r = this.renderer;
     const base = sceneBase(id);
     const res = await fetch(`${base}/scene.json`);
     if (!res.ok) throw new Error(`${base}/scene.json: ${res.status}`);
     const meta: Meta = await res.json();
-    const big = Math.max(screen.width, screen.height) * Math.min(devicePixelRatio, 2) > 1600 && r.capabilities.maxTextureSize >= 4096;
+    const big = this.bigTextures();
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const [gltf, atlasBmp, lutBmp, backBmp] = await Promise.all([
       loader.loadAsync(`${base}/room.glb`),
       image(`${base}/atlas_${big ? 4096 : 2048}`),
       bitmap(`${base}/lut.png`),
-      meta.backdrop ? image(`${base}/backdrop_${big ? 2560 : 1600}`).catch(() => null) : Promise.resolve(null),
+      meta.backdrop ? image(`${base}/backdrop${view ? `_${view}` : ""}_${big ? 2560 : 1600}`).catch(() => null) : Promise.resolve(null),
     ]);
     if (this.disposed) throw new Error("Room3D disposed");
 
@@ -495,7 +568,10 @@ export class Room3D {
     world.add(gltf.scene);
 
     let backdrop: THREE.Mesh | null = null;
-    if (backBmp && meta.backdrop) {
+    let backdropGeo: THREE.BufferGeometry | null = null;
+    const backdropMat = (tex: THREE.Texture) => mat(true, tex, meta.ids.indexOf("window") + 1);
+    const backdrops = new Map<string, THREE.Mesh>();
+    if (meta.backdrop) {
       const b = meta.backdrop;
       const fwd = v3(b.fwd), up = v3(b.up), right = v3(b.right);
       const dist = b.dist ?? BACKDROP_DIST;
@@ -508,11 +584,15 @@ export class Room3D {
       g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), 2));
       g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(16).fill(255), 4, true));
       g.setIndex([0, 2, 1, 1, 2, 3]);
-      const tex = this.texture(backBmp);
-      textures.push(tex);
-      backdrop = new THREE.Mesh(g, mat(true, tex, meta.ids.indexOf("window") + 1));
-      backdrop.frustumCulled = false;
-      world.add(backdrop);
+      backdropGeo = g;
+      if (backBmp) {
+        const tex = this.texture(backBmp);
+        textures.push(tex);
+        backdrop = new THREE.Mesh(g, backdropMat(tex));
+        backdrop.frustumCulled = false;
+        world.add(backdrop);
+        backdrops.set(view, backdrop);
+      }
     }
 
     const lut = this.lut(lutBmp, meta.lut.n);
@@ -521,7 +601,7 @@ export class Room3D {
     r.compile(scene, this.camera);
     const mc = meta.mirrorClear;
     return {
-      id, meta, scene, world, backdrop, mats, lut, textures,
+      id, meta, scene, world, backdrop, view: backdrop ? view : "", backdrops, loading: new Map(), backdropMat, backdropGeo, mats, lut, textures,
       mirrorClear: new THREE.Color().setRGB(mc[0], mc[1], mc[2], THREE.LinearSRGBColorSpace),
     };
   }
@@ -711,6 +791,7 @@ export class Room3D {
   private renderRoom(room: Room, p: DrawParams, target: THREE.WebGLRenderTarget | null, idPass: boolean, prev: THREE.Texture | null) {
     const r = this.renderer;
     const { scene, world, mats, meta } = room;
+    for (const b of room.backdrops.values()) b.visible = b === room.backdrop;
     r.setRenderTarget(this.main);
     r.render(scene, this.camera);
     if (idPass) {

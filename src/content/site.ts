@@ -5,7 +5,7 @@ export const STATES: { id: StateId; label: string; ready: boolean; teaser: strin
   { id: "create", label: "创作", ready: true, teaser: "" },
   { id: "play", label: "游戏", ready: true, teaser: "" },
   { id: "work", label: "工作", ready: true, teaser: "" },
-  { id: "depart", label: "出发", ready: false, teaser: "出发场景还在搭：同一个座位，车窗外换成新疆、巴统、福冈或多哈。" },
+  { id: "depart", label: "出发", ready: true, teaser: "" },
   { id: "chat", label: "和我聊聊", ready: true, teaser: "" },
 ];
 
@@ -13,7 +13,8 @@ export type HotspotId =
   | "writing" | "podcast" | "products" | "rubik" | "cat_shaojiu" | "cat_xiaoba" | "me" | "books" | "window"
   | "project" | "thought"
   | "agent" | "social" | "games" | "brand" | "gov"
-  | "tv" | "gba" | "archive" | "handhelds" | "arcade";
+  | "tv" | "gba" | "archive" | "handhelds" | "arcade"
+  | "nav" | "pingpong" | "cinema" | "passport";
 
 export type Hotspot = { id: HotspotId; route: string; label: string; hint: string; kind: string };
 
@@ -66,8 +67,20 @@ export const PLAY_HOTSPOTS: Hotspot[] = [
   { id: "window", route: "window", kind: "OUTSIDE", label: "窗外", hint: "傍晚的太阳快落山了，玩到吃饭前大家再各自回家。" },
 ];
 
+/** Order matches tools/scene/scene_depart.py. */
+export const DEPART_HOTSPOTS: Hotspot[] = [
+  { id: "nav", route: "nav", kind: "NAVIGATION", label: "中控屏导航", hint: "选一个目的地，车窗外就换成那里。" },
+  { id: "pingpong", route: "pingpong", kind: "TABLE TENNIS", label: "球拍和亚运会门票", hint: "很多次出发，是为了去现场看王楚钦和孙颖莎。" },
+  { id: "cinema", route: "cinema", kind: "CINEMA", label: "出风口上的电影票", hint: "工作日上午的电影院，经常只有我一个人。" },
+  { id: "passport", route: "passport", kind: "PASSPORT", label: "护照和登机牌", hint: "远程工作那几年去过的地方，一页一页盖章。" },
+  { id: "me", route: "me", kind: "MOUT.ME", label: "MouT.me", hint: "握着方向盘，还是同一个座位，窗外一直在换。" },
+  { id: "cat_shaojiu", route: "cats/shaojiu", kind: "CAT", label: "烧酒", hint: "狸花猫，趴在副驾前面的仪表台上晒太阳。" },
+  { id: "cat_xiaoba", route: "cats/xiaoba", kind: "CAT", label: "小八", hint: "英短蓝白，躺在中控屏旁边。" },
+  { id: "window", route: "window", kind: "OUTSIDE", label: "车窗外", hint: "现在开到的这一站：时间、照片和几句话。" },
+];
+
 /** States that have their own 3D room. Every room shares the character, seat and camera. */
-export type SceneId = "now" | "create" | "work" | "play";
+export type SceneId = "now" | "create" | "work" | "play" | "depart";
 
 export type SceneDef = {
   id: SceneId;
@@ -77,6 +90,11 @@ export type SceneDef = {
   caption: string;
   /** Pre-rendered 2.5D fallback exists in public/scene/<id>/. */
   flat: boolean;
+  /**
+   * Interchangeable views outside the same room (出发: one per destination), the first is the default.
+   * Each has its own 3D backdrop (backdrop_<view>) and 2.5D beauty set (public/scene/<id>/<view>/).
+   */
+  views?: readonly string[];
 };
 
 export const SCENES: Record<SceneId, SceneDef> = {
@@ -84,6 +102,17 @@ export const SCENES: Record<SceneId, SceneDef> = {
   create: { id: "create", label: "创作", hotspots: HOTSPOTS, caption: "写作、播客和独立产品。{act}", flat: true },
   work: { id: "work", label: "工作", hotspots: WORK_HOTSPOTS, caption: "做过的每一个行业，都接进了现在的 AI Agent。{act}", flat: true },
   play: { id: "play", label: "游戏", hotspots: PLAY_HOTSPOTS, caption: "从 3 岁的游戏厅，到一面放不下的存档架。{act}", flat: true },
+  depart: {
+    id: "depart", label: "出发", hotspots: DEPART_HOTSPOTS, caption: "同一个驾驶座，车窗外换成去过的地方。{act}", flat: true,
+    views: ["nagoya", "tbilisi", "batumi", "sayram", "doha", "hokkaido", "fukuoka", "dalian", "changsha"],
+  },
+};
+
+/** The view outside a scene: the requested one when the scene has it, otherwise its default. */
+export const sceneView = (scene: SceneId, want?: string) => {
+  const v = SCENES[scene].views;
+  if (!v) return undefined;
+  return want && v.includes(want) ? want : v[0];
 };
 
 export const isScene = (s: string): s is SceneId => s in SCENES;
@@ -94,12 +123,12 @@ export const hotspotByRoute = (scene: SceneId, r: string) =>
 export const NOW = {
   project: {
     name: "MouT.me",
-    status: "四个场景已经搭好",
+    status: "五个场景已经搭好",
     oneLine: "一个可以坐进去的个人网站：同一个我、同一个座位，导航换的是房间。",
     notes: [
       "房间在 Blender 里程序化建模，Cycles 把光照烘焙进贴图，浏览器里用 three.js 实时渲染。",
       "每个场景只换环境、灯光和物件，角色的坐姿和镜头永远不变，切换时只有房间在变。",
-      "目前完成了「此刻」「创作」「工作」和「游戏」，接下来是「出发」。",
+      "五个场景都搭好了：「此刻」「创作」「工作」「游戏」和「出发」。",
     ],
   },
   thought: {
@@ -236,6 +265,67 @@ export const PLAY: Record<PlayId, { lede: string; meta: string; body: string[]; 
   },
 };
 
+export type DestId = "nagoya" | "tbilisi" | "batumi" | "sayram" | "doha" | "hokkaido" | "fukuoka" | "dalian" | "changsha";
+
+export type Photo = { src: string; w: number; h: number; alt: string };
+
+export type Trip = {
+  id: DestId;
+  name: string;
+  en: string;
+  where: string;
+  /** e.g. "2026 年 9 月"; empty until filled in. */
+  when: string;
+  /** One line in the navigation list. */
+  line: string;
+  body: string[];
+  /** Stops on the same trip that have no window of their own. */
+  also?: string[];
+  photos: Photo[];
+  /** Travel guide on the blog, once it is written. */
+  guide?: string;
+};
+
+/** Every destination outside the car, in the order of the navigation screen (tools/scene/textures_depart.py). */
+export const TRIPS: Trip[] = [
+  {
+    id: "nagoya", name: "名古屋", en: "NAGOYA", where: "日本 · 爱知", when: "2026 年秋",
+    line: "亚运会的乒乓球，顺路往北去了金泽、高山和下吕。",
+    body: [
+      "最近一次出发，是去名古屋看亚运会的乒乓球比赛。",
+      "比赛之外，往北走了金泽、高山和下吕，也去了名古屋的吉卜力公园。",
+    ],
+    also: ["金泽", "高山", "下吕", "吉卜力公园"],
+    photos: [],
+  },
+  { id: "tbilisi", name: "第比利斯", en: "TBILISI", where: "格鲁吉亚", when: "", line: "在格鲁吉亚待了 13 天。", body: ["格鲁吉亚一共待了 13 天，第比利斯是其中一站。"], photos: [] },
+  { id: "batumi", name: "巴统", en: "BATUMI", where: "格鲁吉亚 · 黑海边", when: "", line: "格鲁吉亚的 13 天里，黑海边的那一站。", body: [], photos: [] },
+  {
+    id: "sayram", name: "北疆 · 赛里木湖", en: "SAYRAM LAKE", where: "新疆 · 北疆大环线", when: "",
+    line: "自驾走完北疆大环线：阿勒泰、伊犁、赛里木湖。", body: ["北疆大环线是自己开车走完的。"], also: ["阿勒泰", "伊犁"], photos: [],
+  },
+  { id: "doha", name: "多哈", en: "DOHA", where: "卡塔尔", when: "", line: "", body: [], photos: [] },
+  { id: "hokkaido", name: "北海道", en: "HOKKAIDO", where: "日本", when: "", line: "", body: [], photos: [] },
+  { id: "fukuoka", name: "福冈", en: "FUKUOKA", where: "日本 · 九州", when: "", line: "", body: [], photos: [] },
+  { id: "dalian", name: "大连", en: "DALIAN", where: "辽宁", when: "", line: "", body: [], photos: [] },
+  { id: "changsha", name: "长沙", en: "CHANGSHA", where: "湖南", when: "", line: "", body: [], photos: [] },
+];
+
+/** Places stamped in the passport that have no window of their own (yet). */
+export const STAMPS_ELSEWHERE = ["香港", "澳门", "成都", "重庆"];
+
+export type Match = { event: string; what: string; city: string; when: string; trip?: DestId; note?: string };
+
+/** Matches watched in the arena, newest first. */
+export const MATCHES: Match[] = [
+  { event: "爱知·名古屋亚运会", what: "乒乓球", city: "名古屋", when: "2026", trip: "nagoya" },
+];
+
+export const CINEMA = {
+  lede: "工作日的上午，电影院经常只有我一个人。",
+  body: ["远程工作的那几年，我喜欢挑工作日上午的场次。整个厅常常只坐了我一个人，像包场。"],
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -298,13 +388,13 @@ export const CATS = {
   shaojiu: {
     name: "烧酒",
     breed: "狸花猫",
-    spot: { create: "桌子左角", now: "窗台", work: "台灯底下", play: "显像管电视顶上" },
+    spot: { create: "桌子左角", now: "窗台", work: "台灯底下", play: "显像管电视顶上", depart: "副驾前的仪表台" },
     lines: ["深棕色虎斑，白下巴、白爪子。", "在创作场景里，它卷成一团睡在桌子的左角；在咖啡馆里，它占了窗台上最晒的那一块。"],
   },
   xiaoba: {
     name: "小八",
     breed: "英短蓝白",
-    spot: { create: "麦克风旁边", now: "笔记本旁边", work: "窗台", play: "茶几上" },
+    spot: { create: "麦克风旁边", now: "笔记本旁边", work: "窗台", play: "茶几上", depart: "中控屏旁边" },
     lines: ["蓝灰色的背，白色的胸口和爪子。", "在创作场景里，它摊开躺在麦克风旁边，正好压着一块阳光；在咖啡馆里，它直接占了笔记本旁边的半张桌子。"],
   },
 } as const;

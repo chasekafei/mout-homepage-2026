@@ -8,7 +8,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const P = (...p) => path.join(ROOT, ...p);
 // node build-assets.mjs [task] [scene]; scene tasks default to every scene that has source files.
 const only = process.argv[2];
-const SCENES = process.argv[3] ? [process.argv[3]] : ["now", "create", "work", "play"];
+const SCENES = process.argv[3] ? [process.argv[3]] : ["now", "create", "work", "play", "depart"];
 
 async function exists(f) {
   try { await stat(f); return true; } catch { return false; }
@@ -21,21 +21,32 @@ async function scene() {
 async function scene2d(id) {
   const from = P(".cache/scene-src", id);
   const dir = P("public/scene", id);
+  if (!(await exists(from))) { console.warn(`skip ${from}`); return; }
   for (const cam of ["desktop", "mobile"]) {
-    const src = path.join(from, `beauty_${cam}.png`);
-    if (!(await exists(src))) { console.warn(`skip ${src}`); continue; }
+    if (!(await exists(path.join(from, `mask_${cam}.png`)))) { console.warn(`skip ${id} ${cam}: no mask`); continue; }
     await mkdir(dir, { recursive: true });
     await copyFile(path.join(from, `mask_${cam}.png`), path.join(dir, `mask_${cam}.png`));
     await sharp(path.join(from, `depth_${cam}.png`)).resize({ width: cam === "desktop" ? 960 : 540 }).blur(0.8)
       .webp({ quality: 88 }).toFile(path.join(dir, `depth_${cam}.webp`));
-    const widths = cam === "desktop" ? [1280, 1920, 2560] : [720, 1080, 1440];
-    for (const w of widths) {
-      const img = sharp(src).resize({ width: w });
-      await img.clone().webp({ quality: 86, effort: 5 }).toFile(path.join(dir, `beauty_${cam}_${w}.webp`));
-      await img.clone().avif({ quality: 62, effort: 5 }).toFile(path.join(dir, `beauty_${cam}_${w}.avif`));
+  }
+  // one beauty set per view outside: the scene folder itself, plus a sub-folder per destination (出发)
+  const views = [""];
+  for (const f of await readdir(from)) if ((await stat(path.join(from, f))).isDirectory()) views.push(f);
+  for (const v of views) {
+    for (const cam of ["desktop", "mobile"]) {
+      const src = path.join(from, v, `beauty_${cam}.png`);
+      if (!(await exists(src))) continue;
+      const out = path.join(dir, v);
+      await mkdir(out, { recursive: true });
+      const widths = cam === "desktop" ? [1280, 1920, 2560] : [720, 1080, 1440];
+      for (const w of widths) {
+        const img = sharp(src).resize({ width: w });
+        await img.clone().webp({ quality: 86, effort: 5 }).toFile(path.join(out, `beauty_${cam}_${w}.webp`));
+        await img.clone().avif({ quality: 62, effort: 5 }).toFile(path.join(out, `beauty_${cam}_${w}.avif`));
+      }
+      await sharp(src).resize({ width: 48 }).blur(0.6).webp({ quality: 60 }).toFile(path.join(out, `beauty_${cam}_lqip.webp`));
+      console.log(`scene ${id}${v ? `/${v}` : ""} ${cam}: ${widths.join("/")}`);
     }
-    await sharp(src).resize({ width: 48 }).blur(0.6).webp({ quality: 60 }).toFile(path.join(dir, `beauty_${cam}_lqip.webp`));
-    console.log(`scene ${id} ${cam}: ${widths.join("/")}`);
   }
 }
 
@@ -110,7 +121,8 @@ async function publish3d(id) {
     // -cc garbles thin stacked layers (laptop deck, screen); 16-bit positions step ~1 mm over the street's bounds
     "-c", "-kn", "-ke", "-kv", "-vpf", "-vtf", "-vc", "8"], { stdio: "inherit" });
   // atlas and backdrop hold encoded radiance: keep chroma at full resolution
-  for (const [name, widths] of [["atlas", [4096, 2048]], ["backdrop", [2560, 1600]]]) {
+  const backdrops = (await readdir(from)).filter((f) => /^backdrop(_[a-z]+)?\.png$/.test(f)).map((f) => f.slice(0, -4));
+  for (const [name, widths] of [["atlas", [4096, 2048]], ...backdrops.map((b) => [b, [2560, 1600]])]) {
     const src = path.join(from, `${name}.png`);
     if (!(await exists(src))) { console.warn(`skip ${src}`); continue; }
     for (const w of widths) {

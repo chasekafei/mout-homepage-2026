@@ -921,7 +921,7 @@ def stage_backdrop(args):
     c.sensor_width = 36
     c.lens = 18 / math.tan(math.radians(hfov / 2))
     c.clip_start = 0.5
-    c.clip_end = 5000
+    c.clip_end = 40000
     o = bpy.data.objects.new("cam_backdrop", c)
     s.collection.objects.link(o)
     o.location = f["pos"]
@@ -937,12 +937,14 @@ def stage_backdrop(args):
     s.render.image_settings.color_mode = "RGB"
     s.render.use_compositing = False
     OUT.mkdir(parents=True, exist_ok=True)
-    s.render.filepath = str(OUT / "backdrop.exr")
+    # scenes with several views outside (出发) name each backdrop after the view
+    name = "backdrop" + (f"_{bd['tag']}" if bd.get("tag") else "")
+    s.render.filepath = str(OUT / f"{name}.exr")
     t0 = time.time()
     bpy.ops.render.render(write_still=True)
     log(f"backdrop render {time.time() - t0:.1f}s")
-    img = bpy.data.images.load(str(OUT / "backdrop.exr"))
-    save_png(encode(image_array(img)[..., :3]), OUT / "backdrop.png", "bd_enc")
+    img = bpy.data.images.load(str(OUT / f"{name}.exr"))
+    save_png(encode(image_array(img)[..., :3]), OUT / f"{name}.png", "bd_enc")
     m = o.matrix_world.to_3x3()
     meta = {
         "pos": to_gltf(o.location), "fwd": to_gltf(m @ Vector((0, 0, -1))), "up": to_gltf(m @ Vector((0, 1, 0))),

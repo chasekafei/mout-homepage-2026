@@ -4,6 +4,8 @@ export type Variant = "desktop" | "mobile";
 
 export const SCENE = {
   base: (id: SceneId) => `/scene/${id}`,
+  /** Beauty passes of one view outside the room (出发: a destination); masks and depth stay in `base`. */
+  viewBase: (id: SceneId, view?: string) => `/scene/${id}${view ? `/${view}` : ""}`,
   aspect: { desktop: 16 / 9, mobile: 9 / 16 },
   widths: { desktop: [1280, 1920, 2560], mobile: [720, 1080, 1440] },
   focus: { desktop: [0.47, 0.56], mobile: [0.56, 0.5] } as Record<Variant, [number, number]>,
@@ -36,11 +38,11 @@ export function pickVariant(w: number, h: number): Variant {
   return w / h < 0.9 ? "mobile" : "desktop";
 }
 
-export function beautyUrl(scene: SceneId, v: Variant, cssW: number, cssH: number, dpr: number) {
+export function beautyUrl(scene: SceneId, v: Variant, cssW: number, cssH: number, dpr: number, view?: string) {
   const need = Math.max(cssW, cssH * SCENE.aspect[v]) * Math.min(dpr, 2);
   const list = SCENE.widths[v];
   const w = list.find((x) => x >= need * 0.9) ?? list[list.length - 1];
-  return `${SCENE.base(scene)}/beauty_${v}_${w}`;
+  return `${SCENE.viewBase(scene, view)}/beauty_${v}_${w}`;
 }
 
 async function bitmap(url: string) {

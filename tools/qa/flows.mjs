@@ -1,4 +1,4 @@
-// Interaction QA: audio + waveform, keyboard access, Esc, unfinished states, no-WebGL fallback.
+// Interaction QA: audio + waveform, keyboard access, Esc, deep links, 出发 destinations, no-WebGL fallback.
 // Usage: node tools/qa/flows.mjs [baseUrl] [outDir]
 import { chromium } from "playwright-core";
 import { mkdir } from "node:fs/promises";
@@ -56,14 +56,32 @@ await run(["--use-angle=metal"], async (page) => {
   check("Enter opens the focused object", /\/create\/\w+/.test(page.url()), page.url());
   await page.keyboard.press("Escape");
 
-  await page.click("text=出发");
-  await page.waitForTimeout(300);
-  check("unfinished state shows toast", await page.$eval(".toast", (e) => e.classList.contains("is-on")));
-  await page.screenshot({ path: path.join(out, "flow_toast.jpg"), type: "jpeg", quality: 82 });
+  await page.click("nav >> text=出发");
+  await page.waitForTimeout(2800);
+  const departBeacons = await page.$$eval(".beacon", (els) => els.map((e) => e.getAttribute("aria-label")).join(" "));
+  check("nav switches 创作 → 出发", page.url().endsWith("/depart") && departBeacons.includes("中控屏导航"), page.url());
 
-  await page.goto(`${base}/depart`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(400);
-  check("deep link to unfinished state redirects", page.url().endsWith("/now"), page.url());
+  for (const r of ["nav", "nav/tbilisi", "window", "pingpong", "passport", "cinema", "cats/xiaoba", "me"]) {
+    await page.goto(`${base}/depart/${r}`, { waitUntil: "networkidle" });
+    await page.waitForSelector(".app.is-ready");
+    const sheet = await page.waitForSelector(".sheet", { timeout: 4000 }).then((e) => e.innerText(), () => "");
+    check(`depart deep link /depart/${r}`, sheet.trim().length > 20 && page.url().endsWith(`/depart/${r}`), sheet.slice(0, 24).replace(/\s+/g, " "));
+  }
+  await page.goto(`${base}/depart/nav`, { waitUntil: "networkidle" });
+  await page.waitForSelector(".app.is-ready");
+  await page.click(".dest-list >> text=福冈");
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(out, "flow_depart_switch_mid.jpg"), type: "jpeg", quality: 82 });
+  await page.waitForTimeout(2500);
+  check("picking a destination opens its card", page.url().endsWith("/depart/nav/fukuoka"), page.url());
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: path.join(out, "flow_depart_fukuoka.jpg"), type: "jpeg", quality: 82 });
+  await page.click('.beacon[aria-label^="车窗外"]');
+  await page.waitForTimeout(700);
+  const outside = await page.waitForSelector(".sheet", { timeout: 4000 }).then((e) => e.innerText(), () => "");
+  check("the window shows the destination driven to", page.url().endsWith("/depart/window") && outside.includes("FUKUOKA"), outside.slice(0, 30).replace(/\s+/g, " "));
+  await page.keyboard.press("Escape");
 
   for (const r of ["agent", "social", "games", "brand", "gov", "cats/shaojiu", "window", "me"]) {
     await page.goto(`${base}/work/${r}`, { waitUntil: "networkidle" });
@@ -117,7 +135,7 @@ await run(["--use-angle=metal"], async (page) => {
 });
 
 await run(["--disable-webgl", "--disable-webgl2", "--disable-gpu"], async (page) => {
-  for (const scene of ["now", "create", "work", "play"]) {
+  for (const scene of ["now", "create", "work", "play", "depart"]) {
     await page.goto(`${base}/${scene}`, { waitUntil: "networkidle" });
     const ready = await page.waitForSelector(".app.is-ready", { timeout: 10000 }).then(() => true, () => false);
     check(`no-WebGL fallback becomes ready (${scene})`, ready);
@@ -125,6 +143,12 @@ await run(["--disable-webgl", "--disable-webgl2", "--disable-gpu"], async (page)
     check(`fallback still has hotspots (${scene})`, (await page.$$(".beacon")).length > 4);
     await page.screenshot({ path: path.join(out, `flow_nowebgl_${scene}.jpg`), type: "jpeg", quality: 82 });
   }
+  await page.goto(`${base}/depart/nav/doha`, { waitUntil: "networkidle" });
+  await page.waitForSelector(".app.is-ready");
+  await page.waitForTimeout(1500);
+  const src = await page.$eval(".stage-img", (e) => e.currentSrc || e.getAttribute("src") || "");
+  check("fallback swaps the view outside (doha)", src.includes("/depart/doha/"), src.split("/").slice(-2).join("/"));
+  await page.screenshot({ path: path.join(out, "flow_nowebgl_depart_doha.jpg"), type: "jpeg", quality: 82 });
 });
 
 console.log(results.join("\n"));

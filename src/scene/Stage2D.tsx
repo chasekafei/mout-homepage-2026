@@ -11,6 +11,8 @@ export type ScreenRect = { x: number; y: number; w: number; h: number };
 
 type Props = {
   scene: SceneId;
+  /** Which view outside the room (出发: the destination). */
+  view?: string;
   openId: number;
   onOpen: (id: number, origin: ScreenRect) => void;
   onBackground: () => void;
@@ -20,7 +22,7 @@ type Props = {
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const coarse = () => matchMedia("(pointer: coarse)").matches;
 
-export function Stage2D({ scene, openId, onOpen, onBackground, onReady }: Props) {
+export function Stage2D({ scene, view, openId, onOpen, onBackground, onReady }: Props) {
   const HOTSPOTS = SCENES[scene].hotspots;
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -65,7 +67,7 @@ export function Stage2D({ scene, openId, onOpen, onBackground, onReady }: Props)
     let cancelled = false;
     setBeautyReady(false);
     live.current.reveal = 0;
-    const stem = beautyUrl(scene, variant, size.w, size.h, devicePixelRatio);
+    const stem = beautyUrl(scene, variant, size.w, size.h, devicePixelRatio, view);
     loadPasses(scene, variant).then(({ mask, depth, lookup }) => {
       if (cancelled) return;
       comp.current?.setTexture("mask", mask);
@@ -81,7 +83,7 @@ export function Stage2D({ scene, openId, onOpen, onBackground, onReady }: Props)
     }).catch(() => { if (!cancelled) setFallback(true); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene, variant, fallback]);
+  }, [scene, view, variant, fallback]);
 
   useEffect(() => {
     if (beautyReady && (lookupVariant === variant || passesFailed)) onReady?.();
@@ -215,7 +217,7 @@ export function Stage2D({ scene, openId, onOpen, onBackground, onReady }: Props)
   const hovered = hover >= 0 ? regions[hover] : undefined;
   const label = hovered && openId < 0 ? labelPos(labelRect(hovered, regionRect(hovered), fit), size) : null;
   const touch = coarse();
-  const lqip = `${SCENE.base(scene)}/beauty_${variant}_lqip.webp`;
+  const lqip = `${SCENE.viewBase(scene, view)}/beauty_${variant}_lqip.webp`;
 
   return (
     <div
