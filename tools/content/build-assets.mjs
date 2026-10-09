@@ -70,8 +70,6 @@ async function photos() {
   const me = P("public/media/me");
   await mkdir(me, { recursive: true });
   await sharp(P("ref/我的照片/我的像素风头像.png")).resize({ width: 512, kernel: "nearest" }).png().toFile(path.join(me, "avatar-pixel.png"));
-  await sharp(P("ref/我的照片/我的像素风头像.png")).extract({ left: 200, top: 100, width: 300, height: 300 })
-    .resize({ width: 150, kernel: "nearest" }).png().toFile(path.join(me, "avatar-face.png"));
   await sharp(P("ref/我的照片/我的真人照片.png")).resize({ width: 900, withoutEnlargement: true }).webp({ quality: 82 }).toFile(path.join(me, "photo.webp"));
 
   const vol = P("public/media/newsletter/vol-24");

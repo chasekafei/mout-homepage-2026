@@ -82,12 +82,17 @@ export const DEPART_HOTSPOTS: Hotspot[] = [
 /** States that have their own 3D room. Every room shares the character, seat and camera. */
 export type SceneId = "now" | "create" | "work" | "play" | "depart";
 
+export type SceneIntro = {
+  subtitle: string;
+  description: string;
+  action: string;
+};
+
 export type SceneDef = {
   id: SceneId;
   label: string;
   hotspots: Hotspot[];
-  /** One line under the scene; `{act}` becomes the hover / tap instruction. */
-  caption: string;
+  intro: SceneIntro;
   /** Pre-rendered 2.5D fallback exists in public/scene/<id>/. */
   flat: boolean;
   /**
@@ -98,12 +103,50 @@ export type SceneDef = {
 };
 
 export const SCENES: Record<SceneId, SceneDef> = {
-  now: { id: "now", label: "此刻", hotspots: NOW_HOTSPOTS, caption: "最近在做的、在想的，和两只猫今天的样子。{act}", flat: true },
-  create: { id: "create", label: "创作", hotspots: HOTSPOTS, caption: "写作、播客和独立产品。{act}", flat: true },
-  work: { id: "work", label: "工作", hotspots: WORK_HOTSPOTS, caption: "做过的每一个行业，都接进了现在的 AI Agent。{act}", flat: true },
-  play: { id: "play", label: "游戏", hotspots: PLAY_HOTSPOTS, caption: "从 3 岁的游戏厅，到一面放不下的存档架。{act}", flat: true },
+  now: {
+    id: "now", label: "此刻", hotspots: NOW_HOTSPOTS,
+    intro: {
+      subtitle: "猜猜我在干什么",
+      description: "我大概率正坐在某个咖啡馆里远程工作，顺手做着这个网站。也可能只是换了个地方继续想事情。",
+      action: "先点笔记本，看看我现在在做什么。",
+    },
+    flat: true,
+  },
+  create: {
+    id: "create", label: "创作", hotspots: HOTSPOTS,
+    intro: {
+      subtitle: "永远保持好奇",
+      description: "写下想法，做独立产品，也做一些有趣的玩具。想到一个念头，就先把它做出来。",
+      action: "先从桌上的笔记本开始。",
+    },
+    flat: true,
+  },
+  work: {
+    id: "work", label: "工作", hotspots: WORK_HOTSPOTS,
+    intro: {
+      subtitle: "把不同的线接起来",
+      description: "做过电子政务、品牌营销、游戏和社交产品，现在专注 AI 与 AI Agent。跨过的行业，最后都变成了今天做产品的工具。",
+      action: "点墙上的任意一站，沿着这条线往回看。",
+    },
+    flat: true,
+  },
+  play: {
+    id: "play", label: "游戏", hotspots: PLAY_HOTSPOTS,
+    intro: {
+      subtitle: "玩到现在，还没长大",
+      description: "3 岁第一次站在街机前，后来从 FC、MD 一路玩到 PS、Xbox、Switch 和电脑。玩了这么多年，我还是想知道：游戏为什么这样设计。",
+      action: "先点电视，看看我从哪里开始玩。",
+    },
+    flat: true,
+  },
   depart: {
-    id: "depart", label: "出发", hotspots: DEPART_HOTSPOTS, caption: "同一个驾驶座，车窗外换成去过的地方。{act}", flat: true,
+    id: "depart", label: "出发", hotspots: DEPART_HOTSPOTS,
+    intro: {
+      subtitle: "同一个座位，窗外一直在换",
+      description: "远程工作的几年里，我带着电脑去了不少地方。这里收着沿途的风景、看过的比赛，以及后来一直记得的时刻。",
+      action: "点中控屏选一站，车窗外就会换一个地方。",
+    },
+    flat: true,
     views: ["nagoya", "tbilisi", "batumi", "sayram", "doha", "hokkaido", "fukuoka", "dalian", "changsha", "harbin"],
   },
 };

@@ -36,7 +36,6 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [vw, setVw] = useState(innerWidth);
   const toastTimer = useRef(0);
-  const touch = matchMedia("(pointer: coarse)").matches;
 
   useEffect(() => {
     const r = () => setVw(innerWidth);
@@ -81,13 +80,12 @@ export function App() {
   const center = origin ? origin.x + origin.w / 2 : vw;
   const side = vw < 760 ? "bottom" : panel?.side ?? (center > vw * 0.55 ? "left" : "right");
   const activeState: StateId = state === "chat" ? "chat" : scene;
-  const act = touch ? "点一下场景里的东西打开。" : "移动鼠标看看场景里的东西，点一下打开。";
 
   return (
     <div className={`app ${loaded ? "is-ready" : ""}`}>
       <header className="topbar">
         <a className="brand" href={`/${HOME}`} onClick={(e) => { e.preventDefault(); onNav(HOME); }}>
-          <img src="/media/me/avatar-face.png" width={28} height={28} alt="" className="pixel" />
+          <img src="/media/me/avatar-pixel.png" width={32} height={32} alt="" className="pixel" />
           <span>MouT<em>.me</em></span>
         </a>
         <nav className="states" aria-label="状态">
@@ -109,8 +107,14 @@ export function App() {
         <SceneStage scene={scene} view={view} openId={panel ? panel.hotspot : -1} onOpen={onOpen} onBackground={() => panel && close()} onReady={onReady} />
       </main>
 
-      <footer className="caption" hidden={!!panel && side !== "bottom"}>
-        <p><strong>{def.label}</strong>　{def.caption.replace("{act}", act)}</p>
+      <section key={scene} className="scene-intro" aria-label={`${def.label}场景说明`} aria-live="polite">
+        <span className="scene-intro-title">{def.label}</span>
+        <h1>{def.intro.subtitle}</h1>
+        <p>{def.intro.description}</p>
+        <span className="scene-intro-action">{def.intro.action}</span>
+      </section>
+
+      <footer className="quick-actions" hidden={!!panel && side !== "bottom"}>
         <button type="button" className="chip" onClick={() => { setOrigin(null); navigate(`/${scene}/index`); }}>内容目录</button>
         <NowPlaying />
       </footer>
@@ -135,7 +139,13 @@ export function App() {
       </div>
 
       <div className="loader" aria-hidden={loaded}>
-        <div className="loader-mark"><img src="/media/me/avatar-face.png" width={56} height={56} alt="" className="pixel" /><span>MouT<em>.me</em></span></div>
+        <div className="loader-mark">
+          <img src="/media/me/avatar-pixel.png" width={64} height={64} alt="" className="pixel" />
+          <div className="loader-copy">
+            <span>MouT<em>.me</em></span>
+            <small>我的个人网站</small>
+          </div>
+        </div>
         <div className="loader-bar"><span /></div>
         <p>正在把房间搬进来…</p>
       </div>
