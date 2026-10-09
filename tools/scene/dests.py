@@ -719,6 +719,8 @@ DESTS = {
     "fukuoka": {"build": fukuoka, "sun": (0.55, -0.5, 0.62), "sun_strength": 4.2, "sun_col": (1.0, 0.92, 0.8), "sky": "fukuoka"},
     "dalian": {"build": dalian, "sun": (0.55, -0.5, 0.62), "sun_strength": 4.2, "sun_col": (1.0, 0.93, 0.84), "sky": "dalian"},
     "changsha": {"build": changsha, "sun": (0.55, -0.5, 0.58), "sun_strength": 3.8, "sun_col": (1.0, 0.9, 0.78), "sky": "changsha"},
+    # painted only; the snowy Hokkaido road stands in until .cache/paint/harbin/radiance.png exists
+    "harbin": {"build": hokkaido, "sun": (0.55, -0.5, 0.5), "sun_strength": 2.4, "sun_col": (0.78, 0.85, 1.0), "sky": "harbin"},
 }
 
 

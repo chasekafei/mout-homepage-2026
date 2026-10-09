@@ -130,7 +130,7 @@ def build(args):
     B.reset()
     B.mat_voxel("voxel")
     SCENE.build()
-    cams = stage.build_cameras()
+    cams = stage.build_cameras(getattr(SCENE, "CAMERAS", None))
     # matrix_world is stale until the depsgraph runs; the bake reads it straight away
     bpy.context.view_layer.update()
     s = bpy.context.scene
@@ -324,6 +324,11 @@ def main():
         setup_compositor()
     else:
         s.render.use_compositing = False
+    if args.mode in ("mask", "depth"):
+        # tinted glass is see-through for hotspots and the 2.5D parallax
+        for o in bpy.data.objects:
+            if any(c.name == "glass" for c in o.users_collection):
+                o.hide_render = True
     if args.mode == "mask":
         override_mask()
     elif args.mode == "depth":

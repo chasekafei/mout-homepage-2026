@@ -237,6 +237,7 @@ SKIES = {
     "fukuoka": ("#e9e6de", "#acc9e4", "#4e88c9", "#8d9cb0", 0.0),
     "dalian": ("#e4e9ec", "#a6c4e0", "#5288c4", "#8c9bb0", 0.0),
     "changsha": ("#ece2d2", "#c6ccd0", "#7c9cc0", "#9c9a98", 0.0),
+    "harbin": ("#8ea4d8", "#3c5294", "#121a46", "#4c5a88", 0.4),
 }
 
 

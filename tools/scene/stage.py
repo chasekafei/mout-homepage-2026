@@ -53,10 +53,11 @@ def chair_frame(desk, name="chair_root"):
     return B.empty(name, loc, (0, 0, rot), parent=desk)
 
 
-def build_cameras():
+def build_cameras(cameras=None):
+    """``cameras`` overrides CAMERAS for a scene whose character is not at the shared seat (出发 drives)."""
     B.use_collection("cameras")
     cams = {}
-    for name, loc, yaw, pitch, lens in CAMERAS:
+    for name, loc, yaw, pitch, lens in cameras or CAMERAS:
         c = bpy.data.cameras.new(name)
         c.lens = lens
         c.sensor_width = 36

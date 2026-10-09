@@ -61,7 +61,8 @@ def parse():
     ap.add_argument("--samples", type=int, default=384)
     ap.add_argument("--vsamples", type=int, default=768)
     ap.add_argument("--blend", default="")
-    ap.add_argument("--res", type=int, default=2560, help="backdrop width")
+    ap.add_argument("--res", type=int, default=2560, help="backdrop width; guide: long side")
+    ap.add_argument("--cam", default="", help="guide: from this view camera instead of the backdrop's")
     return ap.parse_args(argv)
 
 
@@ -156,10 +157,15 @@ def in_exterior(ob):
     return any(c.name == "exterior" for c in ob.users_collection)
 
 
+def in_glass(ob):
+    """Tinted glass (出发's roof): lights the bake, never baked; the viewer tints the backdrop instead."""
+    return any(c.name == "glass" for c in ob.users_collection)
+
+
 def realize():
     """Replace every interior mesh by a modifier-applied copy (world matrix kept, texture space frozen)."""
     s = bpy.context.scene
-    src = [o for o in s.objects if o.type == "MESH" and not o.hide_render and not in_exterior(o)]
+    src = [o for o in s.objects if o.type == "MESH" and not o.hide_render and not in_exterior(o) and not in_glass(o)]
     dg = bpy.context.evaluated_depsgraph_get()
     col = bpy.data.collections.new("bake")
     s.collection.children.link(col)
@@ -904,15 +910,7 @@ def stage_bake(args, plan_only=False):
     log(f"bake done {time.time() - t0:.1f}s")
 
 
-def stage_backdrop(args):
-    """Exterior seen through the back window, rendered from the desktop camera into a linear EXR."""
-    s = build_scene(args.scene, args.samples)
-    bd = BUILD.SCENE.BACKDROP
-    for o in s.objects:
-        if o.type == "MESH" and not in_exterior(o):
-            o.hide_render = True
-    # The exterior gets its own art-directed light; the room keeps its own sun.
-    bd["light"](s)
+def backdrop_camera(s, bd):
     f = cam_frame("desktop")
     fwd = (bd["target"] - f["pos"]).normalized()
     hfov, aspect = bd["hfov"], bd["aspect"]
@@ -928,6 +926,96 @@ def stage_backdrop(args):
     o.rotation_euler = fwd.to_track_quat("-Z", "Y").to_euler()
     s.camera = o
     bpy.context.view_layer.update()
+    return o
+
+
+def stage_guide(args):
+    """Cabin coverage (alpha = cabin, glass and exterior left out): seen from the backdrop camera, the stencil
+    for painting an exterior; seen from a view camera (``--cam``), where a painted backdrop is laid under the
+    beauty render (tools/scene/paint_beauty.py), with that camera's frame alongside."""
+    s = build_scene(args.scene, 1)
+    bd = BUILD.SCENE.BACKDROP
+    for o in s.objects:
+        if o.type == "MESH" and (in_exterior(o) or in_glass(o)):
+            o.hide_render = True
+    if args.cam:
+        s.camera = bpy.data.objects[f"cam_{args.cam}"]
+        asp = ASPECT[args.cam]
+        w, h = (args.res, round(args.res / asp)) if asp >= 1 else (round(args.res * asp), args.res)
+        name = f"guide_{args.cam}"
+        f = cam_frame(args.cam)
+        (OUT / f"{name}.json").parent.mkdir(parents=True, exist_ok=True)
+        (OUT / f"{name}.json").write_text(json.dumps({
+            "pos": to_gltf(f["pos"]), "fwd": to_gltf(f["fwd"]), "right": to_gltf(f["right"]), "up": to_gltf(f["up"]),
+            "tan_h": f["tan_h"], "tan_v": f["tan_v"]}, indent=1))
+    else:
+        backdrop_camera(s, bd)
+        w, h = args.res, round(args.res / bd["aspect"])
+        name = "guide_cabin"
+    s.render.engine = "BLENDER_WORKBENCH"
+    s.display.shading.light = "FLAT"
+    s.display.shading.color_type = "SINGLE"
+    s.display.shading.single_color = (0.0, 0.0, 0.0)
+    s.render.film_transparent = True
+    s.render.resolution_x, s.render.resolution_y = w, h
+    s.render.resolution_percentage = 100
+    s.render.image_settings.file_format = "PNG"
+    s.render.image_settings.color_mode = "RGBA"
+    s.render.use_compositing = False
+    OUT.mkdir(parents=True, exist_ok=True)
+    s.render.filepath = str(OUT / f"{name}.png")
+    bpy.ops.render.render(write_still=True)
+    log("guide written", name)
+
+
+def glass_meta():
+    """The glass roof as a flat quad at its mean height (glTF), with its transmittance and reflection."""
+    o = bpy.data.objects.get("roof_glass")
+    if o is None:
+        return None
+    import car
+    local = [v.co for v in o.data.vertices]
+    vs = [o.matrix_world @ c for c in local]
+    h = sum(v.z for v in vs) / len(vs)
+    # car.build_roof lays the grid out row by row: corners are the ends of the first and last row
+    row = sum(1 for c in local if abs(c.y - local[0].y) < 1e-6)
+    quad = [vs[0], vs[row - 1], vs[-1], vs[-row]]
+    return {"quad": [to_gltf((v.x, v.y, h)) for v in quad], "t": list(car.GLASS_T), "r": car.GLASS_R}
+
+
+def stage_backdrop(args):
+    """Exterior seen through the back window, rendered from the desktop camera into a linear EXR.
+
+    A destination with a painted view (tools/scene/paint.py) ships the painting itself: the viewer shows it
+    as display colour, only the glass roof tinting it. Birds cut out of it (tools/scene/paint_birds.py) leave a
+    plate behind and fly in front of it, each at its own depth."""
+    s = build_scene(args.scene, args.samples)
+    bd = BUILD.SCENE.BACKDROP
+    name = "backdrop" + (f"_{bd['tag']}" if bd.get("tag") else "")
+    paint = ROOT / ".cache" / "paint" / bd.get("tag", "")
+    painted = paint / "painted.png"
+    if bd.get("tag") and painted.exists():
+        import shutil
+        o = backdrop_camera(s, bd)
+        OUT.mkdir(parents=True, exist_ok=True)
+        birds = None
+        if (paint / "birds.json").exists():
+            shutil.copyfile(paint / "plate.png", OUT / f"{name}.png")
+            shutil.copyfile(paint / "birds.png", OUT / f"birds_{bd['tag']}.png")
+            birds = json.loads((paint / "birds.json").read_text())
+        else:
+            shutil.copyfile(painted, OUT / f"{name}.png")
+            (OUT / f"birds_{bd['tag']}.png").unlink(missing_ok=True)
+        write_backdrop_meta(o, bd, painted=True, birds=birds)
+        log("painted backdrop", painted, f"{len(birds)} birds" if birds else "")
+        return
+    for o in s.objects:
+        if o.type == "MESH" and not in_exterior(o):
+            o.hide_render = True
+    # The exterior gets its own art-directed light; the room keeps its own sun.
+    bd["light"](s)
+    aspect = bd["aspect"]
+    o = backdrop_camera(s, bd)
     W = args.res
     s.render.resolution_x = W
     s.render.resolution_y = round(W / aspect)
@@ -938,20 +1026,57 @@ def stage_backdrop(args):
     s.render.use_compositing = False
     OUT.mkdir(parents=True, exist_ok=True)
     # scenes with several views outside (出发) name each backdrop after the view
-    name = "backdrop" + (f"_{bd['tag']}" if bd.get("tag") else "")
     s.render.filepath = str(OUT / f"{name}.exr")
     t0 = time.time()
     bpy.ops.render.render(write_still=True)
     log(f"backdrop render {time.time() - t0:.1f}s")
     img = bpy.data.images.load(str(OUT / f"{name}.exr"))
     save_png(encode(image_array(img)[..., :3]), OUT / f"{name}.png", "bd_enc")
+    write_backdrop_meta(o, bd, painted=False)
+    log("backdrop written")
+
+
+def screen_meta(bd):
+    """A screen whose picture changes with the view (出发's centre screen): its face, 1.5 mm proud of the baked
+    one (glTF corners TL, TR, BL, BR), and that view's picture copied next to the backdrop."""
+    o = bpy.data.objects.get("screen_face")
+    if o is None or not bd.get("tag"):
+        return None
+    import shutil
+    import blib
+    import car
+    shutil.copyfile(blib.TEX / car.SCREEN_TEX, OUT / f"screen_{bd['tag']}.png")
+    # blib.plane: vertices BL, BR, TL, TR, facing -Y
+    pts = [o.matrix_world @ (v.co + Vector((0, -0.0015, 0))) for v in o.data.vertices]
+    return {"quad": [to_gltf(pts[i]) for i in (2, 3, 0, 1)], "emit": car.SCREEN_EMIT}
+
+
+def write_backdrop_meta(o, bd, painted, birds=None):
+    """The plane's frame; ``painted`` lists the views (tags) whose backdrop is a painting, ``birds`` the
+    cut-outs flying in front of a view's painting."""
     m = o.matrix_world.to_3x3()
+    path = OUT / "backdrop.json"
+    old = json.loads(path.read_text()) if path.exists() else {}
+    prev = set(old.get("painted", []))
+    all_birds = dict(old.get("birds", {}))
+    if bd.get("tag"):
+        prev = prev | {bd["tag"]} if painted else prev - {bd["tag"]}
+        all_birds.pop(bd["tag"], None)
+        if birds:
+            all_birds[bd["tag"]] = birds
     meta = {
         "pos": to_gltf(o.location), "fwd": to_gltf(m @ Vector((0, 0, -1))), "up": to_gltf(m @ Vector((0, 1, 0))),
-        "right": to_gltf(m @ Vector((1, 0, 0))), "hfov": hfov, "aspect": aspect, "dist": bd.get("dist", 40.0),
+        "right": to_gltf(m @ Vector((1, 0, 0))), "hfov": bd["hfov"], "aspect": bd["aspect"],
+        "dist": bd.get("dist", 40.0), "painted": sorted(prev),
     }
-    (OUT / "backdrop.json").write_text(json.dumps(meta, indent=1))
-    log("backdrop written")
+    if all_birds:
+        meta["birds"] = all_birds
+    if bd.get("cabin_gain"):
+        meta["cabinGain"] = {k: list(v) for k, v in bd["cabin_gain"].items()}
+    for k, v in (("glass", glass_meta()), ("screen", screen_meta(bd))):
+        if v:
+            meta[k] = v
+    path.write_text(json.dumps(meta, indent=1))
 
 
 def stage_lut(args):
@@ -984,6 +1109,8 @@ def main():
         stage_bake(args, plan_only=args.stage == "plan")
     elif args.stage == "backdrop":
         stage_backdrop(args)
+    elif args.stage == "guide":
+        stage_guide(args)
     elif args.stage == "lut":
         stage_lut(args)
 

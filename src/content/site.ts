@@ -104,7 +104,7 @@ export const SCENES: Record<SceneId, SceneDef> = {
   play: { id: "play", label: "游戏", hotspots: PLAY_HOTSPOTS, caption: "从 3 岁的游戏厅，到一面放不下的存档架。{act}", flat: true },
   depart: {
     id: "depart", label: "出发", hotspots: DEPART_HOTSPOTS, caption: "同一个驾驶座，车窗外换成去过的地方。{act}", flat: true,
-    views: ["nagoya", "tbilisi", "batumi", "sayram", "doha", "hokkaido", "fukuoka", "dalian", "changsha"],
+    views: ["nagoya", "tbilisi", "batumi", "sayram", "doha", "hokkaido", "fukuoka", "dalian", "changsha", "harbin"],
   },
 };
 
@@ -265,7 +265,7 @@ export const PLAY: Record<PlayId, { lede: string; meta: string; body: string[]; 
   },
 };
 
-export type DestId = "nagoya" | "tbilisi" | "batumi" | "sayram" | "doha" | "hokkaido" | "fukuoka" | "dalian" | "changsha";
+export type DestId = "nagoya" | "tbilisi" | "batumi" | "sayram" | "doha" | "hokkaido" | "fukuoka" | "dalian" | "changsha" | "harbin";
 
 export type Photo = { src: string; w: number; h: number; alt: string };
 
@@ -309,6 +309,7 @@ export const TRIPS: Trip[] = [
   { id: "fukuoka", name: "福冈", en: "FUKUOKA", where: "日本 · 九州", when: "", line: "", body: [], photos: [] },
   { id: "dalian", name: "大连", en: "DALIAN", where: "辽宁", when: "", line: "", body: [], photos: [] },
   { id: "changsha", name: "长沙", en: "CHANGSHA", where: "湖南", when: "", line: "", body: [], photos: [] },
+  { id: "harbin", name: "哈尔滨", en: "HARBIN", where: "黑龙江 · 冰雪大世界", when: "", line: "", body: [], photos: [] },
 ];
 
 /** Places stamped in the passport that have no window of their own (yet). */

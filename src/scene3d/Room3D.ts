@@ -21,8 +21,22 @@ export type Meta = {
   hotspots: Record<string, { min: V3; max: V3; anchor: V3 }>;
   ids: string[];
   markers: Record<string, V3>;
-  backdrop?: { pos: V3; fwd: V3; up: V3; right: V3; hfov: number; aspect: number; dist?: number };
+  backdrop?: {
+    pos: V3; fwd: V3; up: V3; right: V3; hfov: number; aspect: number; dist?: number;
+    /** Views whose backdrop is a painting: shown as display colour, not through the LUT. */
+    painted?: string[];
+    /** Glass roof (flat quad, glTF) tinting what is seen through it: x * t + r. */
+    glass?: { quad: [V3, V3, V3, V3]; t: V3; r: number };
+    /** A screen showing a picture per view (TL, TR, BL, BR), lit like Cycles' emission of that strength. */
+    screen?: { quad: [V3, V3, V3, V3]; emit: number };
+    /** Per view: linear gain on everything but the painting, for a cabin baked in daylight seen at dusk or night. */
+    cabinGain?: Record<string, V3>;
+    /** Per view: birds cut out of the painting (birds_<view>), each flying at its own depth in front of it. */
+    birds?: Record<string, Bird[]>;
+  };
 };
+/** ``uv`` in the atlas, ``at`` on the backdrop (fractions, top left origin), ``depth`` along the backdrop axis (m). */
+type Bird = { uv: [number, number, number, number]; at: [number, number, number, number]; depth: number };
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export const sceneBase = (id: string) => `/scene/${id}/3d`;
@@ -75,11 +89,23 @@ void main() {
 }`;
 
 // Radiance is stored encoded (sqrt(x / (x + K))) everywhere up to the final pass.
-// Alpha carries the floor's Fresnel weight for the planar reflection.
+// Alpha carries the floor's Fresnel weight for the planar reflection, or 1 on a painted backdrop.
 const SCENE_FS = `precision highp float;
 #ifdef USE_UV
 uniform sampler2D uMap;
 in vec2 vUv;
+#endif
+#ifdef PAINTED
+uniform float uK;
+uniform vec3 uGlassO;
+uniform vec3 uGlassU;
+uniform vec3 uGlassV;
+uniform vec3 uGlassT;
+uniform float uGlassR;
+#endif
+#ifdef SCREEN
+uniform float uK;
+uniform float uEmit;
 #endif
 in vec3 vCol;
 in vec3 vWorld;
@@ -93,7 +119,34 @@ out vec4 fragColor;
 void main() {
   // mirrored pass: only what is above the reflecting plane may reflect
   if (uMirror > 0.5 && vWorld.y > uMirrorY + 0.001) discard;
+#ifdef BIRD
+  // straight alpha, blended over the painting; the alpha target stays 1 (painted) under it
+  float birdA = texture(uMap, vUv).a;
+  if (birdA < (uIdPass > 0.5 ? 0.5 : 0.004)) discard;
+#endif
   if (uIdPass > 0.5) { fragColor = vec4(vId / 255.0, 0.0, 0.0, 1.0); return; }
+#ifdef PAINTED
+  // display sRGB -> linear, through the glass roof if the view ray crosses it, re-encoded
+  vec3 c = texture(uMap, vUv).rgb;
+  vec3 x = mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+  vec3 dir = vWorld - cameraPosition;
+  float t = (uGlassO.y - cameraPosition.y) / dir.y;
+  vec3 h = cameraPosition + dir * t - uGlassO;
+  vec2 q = vec2(dot(h, uGlassU) / dot(uGlassU, uGlassU), dot(h, uGlassV) / dot(uGlassV, uGlassV));
+  if (t > 0.0 && t < 1.0 && all(greaterThanEqual(q, vec2(0.0))) && all(lessThanEqual(q, vec2(1.0)))) x = x * uGlassT + uGlassR;
+#ifdef BIRD
+  fragColor = vec4(sqrt(x / (x + uK)), birdA);
+#else
+  fragColor = vec4(sqrt(x / (x + uK)), uMirror > 0.5 ? 0.0 : 1.0);
+#endif
+  return;
+#endif
+#ifdef SCREEN
+  vec3 c = texture(uMap, vUv).rgb;
+  vec3 x = mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)) * uEmit;
+  fragColor = vec4(sqrt(x / (x + uK)), 0.0);
+  return;
+#endif
 #ifdef USE_UV
   vec3 rgb = texture(uMap, vUv).rgb;
 #else
@@ -106,7 +159,8 @@ void main() {
     vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
     if (abs(n.y) > 0.97) {
       float c = clamp(normalize(cameraPosition - vWorld).y, 0.0, 1.0);
-      gloss = plane * 0.5 + 0.5 * (0.04 + 0.96 * pow(1.0 - c, 5.0));
+      // capped below 0.96: 1 marks a painted backdrop
+      gloss = min(plane * 0.5 + 0.5 * (0.04 + 0.96 * pow(1.0 - c, 5.0)), 0.95);
     }
   }
   fragColor = vec4(rgb, gloss);
@@ -196,6 +250,7 @@ uniform float uBloom;
 uniform vec3 uTint;
 uniform vec3 uGain;
 uniform vec3 uLift;
+uniform vec3 uCabinGain;
 uniform vec2 uView;
 uniform vec2 uIdTexel;
 uniform float uHover;
@@ -245,20 +300,24 @@ vec3 fromSrgb(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)
 
 void main() {
   vec4 m = texture(uMain, vUv);
+  float painted = clamp((m.a - 0.95) / 0.05, 0.0, 1.0);
   float desk = step(0.5, m.a);
-  float fres = (m.a - 0.5 * desk) * 2.0;
+  float fres = (m.a - 0.5 * desk) * 2.0 * (1.0 - painted);
   vec3 refl = mix(texture(uRefl0, vUv).rgb, texture(uRefl1, vUv).rgb, desk) * uReflNorm;
-  vec3 x = decodeRad(m.rgb) + refl * fres;
+  vec3 x = (decodeRad(m.rgb) + refl * fres) * mix(uCabinGain, vec3(1.0), painted);
   if (uDebugView > 0.5) { fragColor = vec4(uDebugView < 1.5 ? vec3(fres * 4.0, desk, 0.0) : refl * 0.3, 1.0); return; }
   vec3 b = texture(uGlare, vUv).rgb * uGlareNorm;
   b = mix(vec3(luma(b)), b, 1.1);
   x += b * uBloom * uTint;
   // Blender colour balance (lift / gain), applied like the beauty compositor did
   vec3 s = toSrgb(max(x, 0.0));
+  vec3 shown = clamp(s, 0.0, 1.0);
   s = ((s - 1.0) * (2.0 - uLift) + 1.0) * uGain;
   x = fromSrgb(max(s, 0.0));
   vec3 l = clamp((log2(max(x, vec3(1e-6))) - uLutRange.x) / (uLutRange.y - uLutRange.x), 0.0, 1.0);
   vec3 col = texture(uLut, l * (uLutRange.z - 1.0) / uLutRange.z + 0.5 / uLutRange.z).rgb;
+  // a painted backdrop is already display colour
+  col = mix(col, shown, painted);
 
   float id = idAt(vUv);
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
@@ -318,6 +377,16 @@ async function image(stem: string) {
 
 function v3(a: V3) { return new THREE.Vector3(a[0], a[1], a[2]); }
 
+/** Textured quad from its corners: top left, top right, bottom left, bottom right. */
+function quad(p: THREE.Vector3[], [u0, v0, u1, v1] = [0, 0, 1, 1]) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(p.flatMap((v) => [v.x, v.y, v.z])), 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([u0, v0, u1, v0, u0, v1, u1, v1]), 2));
+  g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(16).fill(255), 4, true));
+  g.setIndex([0, 2, 1, 1, 2, 3]);
+  return g;
+}
+
 export type DrawParams = {
   hover: number; hoverAmt: number; open: number; dim: number; time: number; dust: number; reveal: number;
 };
@@ -329,15 +398,14 @@ type Room = {
   scene: THREE.Scene;
   /** Everything renderable; mirrored about each glossy plane for the reflection passes. */
   world: THREE.Group;
-  /** The backdrop on screen, one of `backdrops`. */
-  backdrop: THREE.Mesh | null;
+  /** What changes with the view on screen (backdrop, screen picture), one of `backdrops`. */
+  backdrop: THREE.Group | null;
   view: string;
-  /** Loaded backdrops by view, least recently shown first. */
-  backdrops: Map<string, THREE.Mesh>;
+  /** Loaded views, least recently shown first. */
+  backdrops: Map<string, THREE.Group>;
   loading: Map<string, Promise<void>>;
-  /** Builds the material of a backdrop added later. */
-  backdropMat: (tex: THREE.Texture) => THREE.RawShaderMaterial;
-  backdropGeo: THREE.BufferGeometry | null;
+  /** Builds the group of a view added later; null when the room has no backdrop. */
+  viewGroup: ((back: THREE.Texture, screen: THREE.Texture | null, birds: THREE.Texture | null, view: string) => THREE.Group) | null;
   mats: THREE.RawShaderMaterial[];
   lut: THREE.Data3DTexture;
   textures: THREE.Texture[];
@@ -377,6 +445,10 @@ export class Room3D {
   private final: THREE.RawShaderMaterial;
   private size = { w: 1, h: 1, pr: 1 };
   private px = new Uint8Array(4);
+  /** Seconds the birds have flown (frozen under reduced motion). */
+  private flight = 0;
+  private flyUp = new THREE.Vector3();
+  private flySide = new THREE.Vector3();
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const r = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance", stencil: false });
@@ -397,6 +469,7 @@ export class Room3D {
       uIds: { value: null }, uLut: { value: null },
       uLutRange: { value: new THREE.Vector3() }, uK: { value: 0.6 }, uBloom: { value: 0.45 },
       uTint: { value: new THREE.Vector3() }, uGain: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() },
+      uCabinGain: { value: new THREE.Vector3(1, 1, 1) },
       uView: { value: new THREE.Vector2() }, uIdTexel: { value: new THREE.Vector2() },
       uHover: { value: -1 }, uHoverAmt: { value: 0 }, uOpen: { value: -1 }, uDim: { value: 0 }, uTime: { value: 0 },
       uDust: { value: 1 }, uReveal: { value: 0 }, uDrift: { value: new THREE.Vector2() },
@@ -485,18 +558,13 @@ export class Room3D {
     let p = room.loading.get(view);
     if (!p) {
       p = (async () => {
-        if (!room.backdropGeo) return;
-        const big = this.bigTextures();
-        const bmp = await image(`${sceneBase(room.id)}/backdrop_${view}_${big ? 2560 : 1600}`);
+        if (!room.viewGroup) return;
+        const [back, screenBmp, birdsBmp] = await this.viewImages(room.id, room.meta, view);
         if (this.disposed) return;
-        const tex = this.texture(bmp);
-        room.textures.push(tex);
-        this.renderer.initTexture(tex);
-        const mesh = new THREE.Mesh(room.backdropGeo, room.backdropMat(tex));
-        mesh.frustumCulled = false;
-        mesh.visible = false;
-        room.world.add(mesh);
-        room.backdrops.set(view, mesh);
+        const g = room.viewGroup(this.texture(back), screenBmp && this.texture(screenBmp), birdsBmp && this.texture(birdsBmp), view);
+        g.visible = false;
+        room.world.add(g);
+        room.backdrops.set(view, g);
       })().finally(() => room.loading.delete(view));
       room.loading.set(view, p);
     }
@@ -506,18 +574,32 @@ export class Room3D {
   /** Drop the least recently shown backdrops of a room beyond RESIDENT_VIEWS. */
   private trimViews(room: Room) {
     const keep = new Set([room.backdrop, this.prev?.backdrop]);
-    for (const [view, mesh] of [...room.backdrops]) {
+    for (const [view, g] of [...room.backdrops]) {
       if (room.backdrops.size <= RESIDENT_VIEWS) break;
-      if (keep.has(mesh)) continue;
+      if (keep.has(g)) continue;
       room.backdrops.delete(view);
-      room.world.remove(mesh);
-      const m = mesh.material as THREE.RawShaderMaterial;
-      const t = m.uniforms.uMap.value as THREE.Texture;
-      room.mats.splice(room.mats.indexOf(m), 1);
-      room.textures.splice(room.textures.indexOf(t), 1);
-      m.dispose();
-      t.dispose();
+      room.world.remove(g);
+      const mats = new Set<THREE.RawShaderMaterial>();
+      for (const mesh of g.children as THREE.Mesh[]) {
+        mats.add(mesh.material as THREE.RawShaderMaterial);
+        // the backdrop and screen quads are shared by every view
+        if (mesh.userData.bird) mesh.geometry.dispose();
+      }
+      const texs = new Set([...mats].map((m) => m.uniforms.uMap.value as THREE.Texture));
+      for (const m of mats) { room.mats.splice(room.mats.indexOf(m), 1); m.dispose(); }
+      for (const t of texs) { room.textures.splice(room.textures.indexOf(t), 1); t.dispose(); }
     }
+  }
+
+  /** The backdrop of a view and, where the room has them, its screen picture and bird cut-outs. */
+  private viewImages(id: string, meta: Meta, view: string) {
+    const big = this.bigTextures();
+    const base = sceneBase(id);
+    return Promise.all([
+      image(`${base}/backdrop${view ? `_${view}` : ""}_${big ? 2560 : 1600}`),
+      meta.backdrop?.screen && view ? image(`${base}/screen_${view}_1024`).catch(() => null) : Promise.resolve(null),
+      meta.backdrop?.birds?.[view] ? image(`${base}/birds_${view}`).catch(() => null) : Promise.resolve(null),
+    ]);
   }
 
   private bigTextures() {
@@ -532,11 +614,11 @@ export class Room3D {
     const meta: Meta = await res.json();
     const big = this.bigTextures();
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-    const [gltf, atlasBmp, lutBmp, backBmp] = await Promise.all([
+    const [gltf, atlasBmp, lutBmp, viewBmps] = await Promise.all([
       loader.loadAsync(`${base}/room.glb`),
       image(`${base}/atlas_${big ? 4096 : 2048}`),
       bitmap(`${base}/lut.png`),
-      meta.backdrop ? image(`${base}/backdrop${view ? `_${view}` : ""}_${big ? 2560 : 1600}`).catch(() => null) : Promise.resolve(null),
+      meta.backdrop ? this.viewImages(id, meta, view).catch(() => null) : Promise.resolve(null),
     ]);
     if (this.disposed) throw new Error("Room3D disposed");
 
@@ -544,15 +626,24 @@ export class Room3D {
     const world = new THREE.Group();
     scene.add(world);
     const mats: THREE.RawShaderMaterial[] = [];
-    const textures = [this.texture(atlasBmp)];
+    const textures: THREE.Texture[] = [this.texture(atlasBmp)];
     const planes = new THREE.Vector2(...meta.planes);
-    const mat = (uv: boolean, map: THREE.Texture | null, hs = -1) => {
+    const glass = meta.backdrop?.glass;
+    const gq = glass?.quad.map(v3) ?? [new THREE.Vector3(0, 1e9, 0), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const glassUniforms = {
+      uK: { value: meta.encodeK }, uGlassO: { value: gq[0] },
+      uGlassU: { value: gq[1].clone().sub(gq[0]) }, uGlassV: { value: gq[3].clone().sub(gq[0]) },
+      uGlassT: { value: new THREE.Vector3(...(glass?.t ?? [1, 1, 1])) }, uGlassR: { value: glass?.r ?? 0 },
+    };
+    /** ``kind``: "" baked radiance, "PAINTED" a painted backdrop, "SCREEN" a screen picture (display sRGB). */
+    const mat = (uv: boolean, map: THREE.Texture | null, hs = -1, kind: "" | "PAINTED" | "SCREEN" = "") => {
       const m = new THREE.RawShaderMaterial({
         vertexShader: SCENE_VS, fragmentShader: SCENE_FS, glslVersion: THREE.GLSL3,
-        defines: uv ? { USE_UV: "" } : {},
+        defines: { ...(uv ? { USE_UV: "" } : {}), ...(kind ? { [kind]: "" } : {}) },
         uniforms: {
           uMap: { value: map }, uIdPass: { value: 0 }, uId: { value: hs },
           uMirror: { value: 0 }, uMirrorY: { value: 0 }, uPlanes: { value: planes },
+          ...(kind === "PAINTED" ? glassUniforms : kind === "SCREEN" ? { uK: { value: meta.encodeK } } : {}),
         },
       });
       mats.push(m);
@@ -567,10 +658,9 @@ export class Room3D {
     });
     world.add(gltf.scene);
 
-    let backdrop: THREE.Mesh | null = null;
-    let backdropGeo: THREE.BufferGeometry | null = null;
-    const backdropMat = (tex: THREE.Texture) => mat(true, tex, meta.ids.indexOf("window") + 1);
-    const backdrops = new Map<string, THREE.Mesh>();
+    let backdrop: THREE.Group | null = null;
+    let viewGroup: Room["viewGroup"] = null;
+    const backdrops = new Map<string, THREE.Group>();
     if (meta.backdrop) {
       const b = meta.backdrop;
       const fwd = v3(b.fwd), up = v3(b.up), right = v3(b.right);
@@ -578,18 +668,53 @@ export class Room3D {
       const c = v3(b.pos).addScaledVector(fwd, dist);
       const hw = dist * Math.tan((b.hfov / 2) * DEG), hh = hw / b.aspect;
       const corner = (sx: number, sy: number) => c.clone().addScaledVector(right, sx * hw).addScaledVector(up, sy * hh);
-      const p = [corner(-1, 1), corner(1, 1), corner(-1, -1), corner(1, -1)];
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(p.flatMap((v) => [v.x, v.y, v.z])), 3));
-      g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), 2));
-      g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(16).fill(255), 4, true));
-      g.setIndex([0, 2, 1, 1, 2, 3]);
-      backdropGeo = g;
-      if (backBmp) {
-        const tex = this.texture(backBmp);
-        textures.push(tex);
-        backdrop = new THREE.Mesh(g, backdropMat(tex));
-        backdrop.frustumCulled = false;
+      const backGeo = quad([corner(-1, 1), corner(1, 1), corner(-1, -1), corner(1, -1)]);
+      const screenGeo = b.screen ? quad(b.screen.quad.map(v3)) : null;
+      const eye = v3(b.pos);
+      const windowId = meta.ids.indexOf("window") + 1;
+      viewGroup = (back, screenTex, birdsTex, v) => {
+        const g = new THREE.Group();
+        const add = (geo: THREE.BufferGeometry, m: THREE.RawShaderMaterial, tex: THREE.Texture) => {
+          textures.push(tex);
+          r.initTexture(tex);
+          const mesh = new THREE.Mesh(geo, m);
+          mesh.frustumCulled = false;
+          g.add(mesh);
+          return mesh;
+        };
+        add(backGeo, mat(true, back, windowId, b.painted?.includes(v) ? "PAINTED" : ""), back);
+        if (screenGeo && screenTex) {
+          const m = mat(true, screenTex, meta.ids.indexOf("nav") + 1, "SCREEN");
+          m.uniforms.uEmit = { value: b.screen!.emit };
+          add(screenGeo, m, screenTex);
+        }
+        if (birdsTex) {
+          textures.push(birdsTex);
+          r.initTexture(birdsTex);
+          // one material for the flock; each bird its own mesh so the transparent pass sorts them by distance
+          const m = mat(true, birdsTex, windowId, "PAINTED");
+          m.defines.BIRD = "";
+          m.transparent = true;
+          m.depthWrite = false;
+          b.birds![v].forEach((bird, i) => {
+            // the rect it covers on the plane, pulled towards the eye: same pixels from the backdrop camera
+            const s = bird.depth / dist;
+            const [x0, y0, x1, y1] = bird.at;
+            const at = (u: number, w: number) => eye.clone().lerp(corner(u * 2 - 1, 1 - w * 2), s);
+            const p = [at(x0, y0), at(x1, y0), at(x0, y1), at(x1, y1)];
+            const mid = p.reduce((a, q) => a.add(q), new THREE.Vector3()).multiplyScalar(0.25);
+            const mesh = new THREE.Mesh(quad(p.map((q) => q.sub(mid)), bird.uv), m);
+            mesh.position.copy(mid);
+            mesh.frustumCulled = false;
+            mesh.userData.bird = { base: mid.clone(), axis: mid.clone().sub(eye).normalize(), depth: bird.depth, phase: i * 2.399 };
+            g.add(mesh);
+          });
+        }
+        return g;
+      };
+      if (viewBmps) {
+        const [back, screenBmp, birdsBmp] = viewBmps;
+        backdrop = viewGroup(this.texture(back), screenBmp && this.texture(screenBmp), birdsBmp && this.texture(birdsBmp), view);
         world.add(backdrop);
         backdrops.set(view, backdrop);
       }
@@ -601,7 +726,7 @@ export class Room3D {
     r.compile(scene, this.camera);
     const mc = meta.mirrorClear;
     return {
-      id, meta, scene, world, backdrop, view: backdrop ? view : "", backdrops, loading: new Map(), backdropMat, backdropGeo, mats, lut, textures,
+      id, meta, scene, world, backdrop, view: backdrop ? view : "", backdrops, loading: new Map(), viewGroup, mats, lut, textures,
       mirrorClear: new THREE.Color().setRGB(mc[0], mc[1], mc[2], THREE.LinearSRGBColorSpace),
     };
   }
@@ -706,7 +831,23 @@ export class Room3D {
       this.fade = Math.min(1, this.fade + dt / this.fadeDur);
       if (this.fade >= 1) this.prev = null;
     }
+    if (!still) this.flight += dt;
+    for (const g of [this.cur?.backdrop, this.prev?.backdrop]) if (g) this.fly(g);
     this.updateCamera();
+  }
+
+  /** Birds glide: a slow bob and sway (a fraction of their distance, so all look alike on screen) and a bank. */
+  private fly(g: THREE.Group) {
+    const t = this.flight;
+    for (const mesh of g.children) {
+      const b = mesh.userData.bird;
+      if (!b) continue;
+      const w = (2 * Math.PI) / (5 + (b.phase % 3));
+      const up = Math.sin(t * w + b.phase) * 0.012 * b.depth;
+      const side = Math.sin(t * w * 0.53 + b.phase * 1.7) * 0.02 * b.depth;
+      mesh.position.copy(b.base).add(this.flyUp.set(0, up, 0)).addScaledVector(this.flySide.crossVectors(b.axis, this.flyUp.set(0, 1, 0)), side);
+      mesh.quaternion.setFromAxisAngle(b.axis, Math.sin(t * w + b.phase + 0.9) * 0.07);
+    }
   }
 
   private updateCamera() {
@@ -850,6 +991,7 @@ export class Room3D {
     u.uTint.value.set(...g.tint);
     u.uGain.value.set(...g.gain);
     u.uLift.value.set(...g.lift);
+    u.uCabinGain.value.set(...(meta.backdrop?.cabinGain?.[room.view] ?? [1, 1, 1]));
     u.uMain.value = this.main.texture;
     u.uGlare.value = up[0].texture;
     u.uGlareNorm.value = 1 / n;

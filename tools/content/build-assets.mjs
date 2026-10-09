@@ -120,9 +120,11 @@ async function publish3d(id) {
   execFileSync(P("node_modules/.bin/gltfpack"), ["-i", path.join(from, "room.glb"), "-o", path.join(dir, "room.glb"),
     // -cc garbles thin stacked layers (laptop deck, screen); 16-bit positions step ~1 mm over the street's bounds
     "-c", "-kn", "-ke", "-kv", "-vpf", "-vtf", "-vc", "8"], { stdio: "inherit" });
-  // atlas and backdrop hold encoded radiance: keep chroma at full resolution
-  const backdrops = (await readdir(from)).filter((f) => /^backdrop(_[a-z]+)?\.png$/.test(f)).map((f) => f.slice(0, -4));
-  for (const [name, widths] of [["atlas", [4096, 2048]], ...backdrops.map((b) => [b, [2560, 1600]])]) {
+  // atlas and backdrop hold encoded radiance (or a painting), screens small text: keep chroma at full resolution
+  const files = await readdir(from);
+  const backdrops = files.filter((f) => /^backdrop(_[a-z]+)?\.png$/.test(f)).map((f) => f.slice(0, -4));
+  const screens = files.filter((f) => /^screen_[a-z]+\.png$/.test(f)).map((f) => f.slice(0, -4));
+  for (const [name, widths] of [["atlas", [4096, 2048]], ...backdrops.map((b) => [b, [2560, 1600]]), ...screens.map((s) => [s, [1024]])]) {
     const src = path.join(from, `${name}.png`);
     if (!(await exists(src))) { console.warn(`skip ${src}`); continue; }
     for (const w of widths) {
@@ -130,6 +132,12 @@ async function publish3d(id) {
       await img.clone().avif({ quality: 72, effort: 6, chromaSubsampling: "4:4:4" }).toFile(path.join(dir, `${name}_${w}.avif`));
       await img.clone().webp({ quality: 92, effort: 5, smartSubsample: true }).toFile(path.join(dir, `${name}_${w}.webp`));
     }
+  }
+  // bird cut-outs (straight alpha) at the painting's own resolution
+  for (const f of files.filter((f) => /^birds_[a-z]+\.png$/.test(f))) {
+    const img = sharp(path.join(from, f));
+    await img.clone().avif({ quality: 80, effort: 6, chromaSubsampling: "4:4:4" }).toFile(path.join(dir, f.replace(".png", ".avif")));
+    await img.clone().webp({ quality: 92, alphaQuality: 100, effort: 5 }).toFile(path.join(dir, f.replace(".png", ".webp")));
   }
   await sharp(path.join(from, "lut.png")).toColourspace("srgb").png({ compressionLevel: 9 }).toFile(path.join(dir, "lut.png"));
   const room = JSON.parse(await readFile(path.join(from, "room.json"), "utf8"));
