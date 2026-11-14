@@ -118,6 +118,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 .error-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 24px 48px; padding: 10px 12px; border-left: 2px solid var(--coral); background: rgba(231,123,91,.08); color: var(--muted-2); font-size: 12px; }
 .error-note span { color: var(--coral); font: 10px/1 var(--mono); }
 .error-note button { border: 0; border-bottom: 1px solid var(--coral); padding: 0; background: none; color: var(--paper); font-size: 12px; }
+.archive-warning { width: min(100%, 640px); margin: -8px auto 18px; border-left: 2px solid var(--sun); padding: 7px 10px; color: var(--muted); font-size: 11px; }
 
 .composer-wrap { flex: none; width: min(100%, 640px); margin: auto auto 0; }
 .composer-mode { display: flex; align-items: center; gap: 7px; margin: 0 0 8px 4px; color: var(--muted); font: 10px/1 var(--mono); }

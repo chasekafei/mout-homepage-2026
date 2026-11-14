@@ -24,6 +24,7 @@ export type AgentEvent =
   | { type: "meta"; mode: AgentMode; provider?: string; model?: string; searching?: boolean }
   | { type: "delta"; text: string }
   | { type: "source"; source: AgentSource }
+  | { type: "archive_warning"; message: string }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -36,6 +37,23 @@ type ChatRequest = {
 
 const API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
 const MOCK = import.meta.env.VITE_AGENT_MOCK !== "false" && !API_URL;
+let warmupPromise: Promise<void> | null = null;
+
+export async function warmAgentBackend() {
+  if (!API_URL) return;
+  warmupPromise ??= (async () => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 4_000);
+    try {
+      await fetch(`${API_URL}/v1/warmup`, { signal: controller.signal, cache: "no-store" });
+    } catch {
+      // Warmup is opportunistic; the chat request remains the source of truth.
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  })();
+  await warmupPromise;
+}
 
 function mockAnswer(input: string): { answer: string; sources: AgentSource[]; searching: boolean } {
   const q = input.toLowerCase();
@@ -109,6 +127,7 @@ function parseEventLine(line: string): AgentEvent | null {
       return { type: "source", source: { id: payload.url, title: payload.title, kind: "web", detail: "实时来源", url: payload.url } };
     }
     if (payload.type === "done") return { type: "done" };
+    if (payload.type === "archive_warning") return { type: "archive_warning", message: typeof payload.message === "string" ? payload.message : "本轮对话没有写入收件箱" };
     if (payload.type === "error") return { type: "error", message: typeof payload.message === "string" ? payload.message : "上游请求失败" };
     if (payload.type === "delta" && typeof payload.text === "string") return { type: "delta", text: payload.text };
     return null;

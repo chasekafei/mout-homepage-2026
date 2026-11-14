@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { selectHistoryWithinBudget } from "@mout/agent-core";
-import { AgentEvent, AgentMode, AgentSource, ChatMessage, isMockMode, streamChat } from "./api";
+import { AgentEvent, AgentMode, AgentSource, ChatMessage, isMockMode, streamChat, warmAgentBackend } from "./api";
 import "./styles.css";
 
 type IconName = "arrow" | "back" | "book" | "chevron" | "close" | "external" | "globe" | "spark";
@@ -158,11 +158,14 @@ export function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [searching, setSearching] = useState(false);
   const [sources, setSources] = useState<AgentSource[]>([]);
+  const [archiveWarning, setArchiveWarning] = useState("");
   const [error, setError] = useState("");
   const [showContext, setShowContext] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { void warmAgentBackend(); }, []);
 
   const setMessages: MessageSetter = (value) => {
     setConversationState((state) => ({
@@ -261,6 +264,7 @@ export function App() {
     const next = [...messages, user, assistant];
     setMessages(next);
     setSources([]);
+    setArchiveWarning("");
     setShowContext(false);
     setSearching(false);
     setIsStreaming(true);
@@ -273,6 +277,7 @@ export function App() {
           setSources((current) => current.some((item) => item.id === event.source.id) ? current : [...current, event.source]);
           setShowContext(true);
         }
+        if (event.type === "archive_warning") setArchiveWarning(event.message);
         if (event.type === "delta") {
           reveal.push(event.text);
         }
@@ -346,6 +351,7 @@ export function App() {
                     <div className="message-body"><div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>{message.role === "assistant" && message.pending && !message.content ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找公开来源</span></div> : <div className="thinking-state">正在组织回答<span className="thinking-dots" aria-hidden>···</span></div> : <p>{message.content}{message.pending && <span className="stream-caret" />}</p>}{message.role === "assistant" && message.content && !message.pending && sources.length > 0 && message.id === messages.at(-1)?.id && <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />基于 {sources.length} 个来源</button>}</div>
                   </article>
                 ))}
+                {archiveWarning && <p className="archive-warning" role="status">{archiveWarning}</p>}
                 {error && <div className="error-note"><span>连接中断</span>{error}<button type="button" onClick={() => void send(messages.at(-2)?.content ?? "")}>重试</button></div>}
               </div>
             )}

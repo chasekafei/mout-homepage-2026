@@ -38,5 +38,6 @@ export type ProviderEvent =
   | { type: "delta"; text: string }
   | { type: "citation"; title: string; url: string }
   | { type: "status"; value: "searching" | "answering" }
+  | { type: "archive_warning"; message: string }
   | { type: "done"; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }
   | { type: "error"; message: string };

@@ -8,6 +8,9 @@ export const config = {
   allowedOrigins: csv(process.env.ALLOWED_ORIGINS, ["http://localhost:5173", "http://localhost:5174"]),
   defaultProvider: (process.env.DEFAULT_PROVIDER || "gptproto") as ProviderName,
   timeZone: process.env.AGENT_TIMEZONE || "Asia/Shanghai",
+  databaseUrl: process.env.DATABASE_URL || "",
+  adminPassword: process.env.ADMIN_PASSWORD || "",
+  adminSessionSecret: process.env.ADMIN_SESSION_SECRET || "",
   gptproto: {
     apiKey: process.env.GPTPROTO_API_KEY || "",
     baseUrl: process.env.GPTPROTO_BASE_URL || "https://gptproto.com/v1",

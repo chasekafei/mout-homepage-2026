@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -15,6 +16,16 @@ import {
 } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
 import { providerModel, sseEvent, streamProvider } from "./provider.js";
+import {
+  archiveEnabled,
+  beginArchiveTurn,
+  completeArchiveTurn,
+  getAdminConversation,
+  listAdminConversations,
+  updateAdminConversation,
+  warmArchive,
+} from "./archive.js";
+import { adminConfigured, allowAdminLogin, clearAdminCookie, isAdminRequest, setAdminCookie, verifyAdminPassword } from "./admin-auth.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../");
 let facts: Awaited<ReturnType<typeof loadFacts>> = [];
@@ -36,12 +47,14 @@ function setCors(req: IncomingMessage, res: ServerResponse) {
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(body));
 }
 
@@ -73,6 +86,33 @@ function allowedRequest(req: IncomingMessage): boolean {
   return current.count <= 20;
 }
 
+function originAllowedForAdmin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  return !!origin && config.allowedOrigins.includes(origin);
+}
+
+function adminDenied(req: IncomingMessage, res: ServerResponse): boolean {
+  if (!adminConfigured()) {
+    sendJson(res, 503, { error: "管理员登录尚未配置" });
+    return true;
+  }
+  if (!originAllowedForAdmin(req)) {
+    sendJson(res, 403, { error: "origin 不被允许" });
+    return true;
+  }
+  if (!isAdminRequest(req)) {
+    sendJson(res, 401, { error: "需要管理员登录" });
+    return true;
+  }
+  return false;
+}
+
+const CONTACT_INTENT = /(求职|找工作|应聘|招聘|岗位|职位|面试|内推|简历|猎头|职业机会|工作机会|合作|联名|商务|项目合作|咨询合作|想联系|联系你|联系MouT|联系Mout|与你聊聊|聊合作|一起做|work together|job opportunity|collaborat|partnership|hiring|recruiting)/iu;
+
+function potentialContact(message: string): boolean {
+  return CONTACT_INTENT.test(message);
+}
+
 function asRequest(value: unknown): AgentRequest {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const message = typeof input.message === "string" ? input.message.trim() : "";
@@ -90,6 +130,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   try { input = asRequest(await readJson(req)); } catch (error) { return sendJson(res, 400, { error: error instanceof Error ? error.message : "请求格式不正确" }); }
 
   const provider = input.provider || config.defaultProvider;
+  const model = providerModel(provider, input.model);
+  const conversationId = input.conversationId || randomUUID();
   const search = shouldSearch(input.message);
   const selectedFacts = retrieveFacts(input.message, facts, config.maxContextFacts);
   const runtimeContext = buildRuntimeContext(new Date(), config.timeZone, input.timezone);
@@ -110,6 +152,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   ];
 
   res.statusCode = 200;
+  res.setHeader("X-Conversation-Id", conversationId);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
@@ -121,19 +164,165 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   // A short SSE comment makes small early events pass through buffering proxies.
   res.write(`: stream-open${" ".repeat(2048)}\n\n`);
   res.write(sseEvent({ type: "status", value: search ? "searching" : "answering" }));
-  for await (const event of streamProvider(provider, { messages, model: providerModel(provider, input.model), stream: true, useWebSearch: search })) {
-    res.write(sseEvent(event));
-    await new Promise<void>((resolve) => setImmediate(resolve));
+
+  // Start the archive write alongside generation; a sleeping database never delays the first token.
+  const archiveTurnPromise = archiveEnabled() ? beginArchiveTurn({
+    conversationId,
+    source: input.source || "im",
+    userMessage: input.message,
+    title: input.message,
+    potentialContact: potentialContact(input.message),
+  }).catch((error) => {
+    console.error("Unable to archive chat turn", error instanceof Error ? error.name : "DatabaseError");
+    if (!res.destroyed && !res.writableEnded) {
+      res.write(sseEvent({ type: "archive_warning", message: "这次对话暂时无法写入后台归档，但仍可继续聊天。" }));
+    }
+    return null;
+  }) : Promise.resolve(null);
+
+  let answer = "";
+  let citations: Array<{ title: string; url: string }> = [];
+  let answerStatus: "complete" | "error" = "complete";
+  try {
+    for await (const event of streamProvider(provider, { messages, model, stream: true, useWebSearch: search })) {
+      if (event.type === "delta") answer += event.text;
+      if (event.type === "citation") citations = [...citations, { title: event.title, url: event.url }];
+      if (event.type === "error") answerStatus = "error";
+      if (!res.destroyed && !res.writableEnded) res.write(sseEvent(event));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  } catch (error) {
+    answerStatus = "error";
+    const message = error instanceof Error ? error.message : "上游请求失败";
+    if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "error", message }));
+  }
+  if (!answer.trim()) answerStatus = "error";
+
+  const archiveTurn = await archiveTurnPromise;
+  if (archiveTurn) {
+    try {
+      await completeArchiveTurn({
+        assistantMessageId: archiveTurn.assistantMessageId,
+        conversationId: archiveTurn.conversationId,
+        content: answer,
+        status: answerStatus,
+        model,
+        provider,
+        citations,
+      });
+    } catch (error) {
+      console.error("Unable to finalize archived chat turn", error);
+      if (!res.destroyed && !res.writableEnded) {
+        res.write(sseEvent({ type: "archive_warning", message: "回复已生成，但这次对话暂未完成后台归档。" }));
+      }
+    }
   }
   res.end();
+}
+
+async function handleAdminLogin(req: IncomingMessage, res: ServerResponse) {
+  if (!originAllowedForAdmin(req)) return sendJson(res, 403, { error: "origin 不被允许" });
+  if (!adminConfigured()) return sendJson(res, 503, { error: "管理员登录尚未配置" });
+  if (!allowAdminLogin(clientKey(req))) return sendJson(res, 429, { error: "登录尝试过多，请稍后再试" });
+  let input: unknown;
+  try { input = await readJson(req, 4_096); } catch { return sendJson(res, 400, { error: "请求格式不正确" }); }
+  const password = input && typeof input === "object" ? (input as Record<string, unknown>).password : undefined;
+  if (!verifyAdminPassword(password)) return sendJson(res, 401, { error: "密码不正确" });
+  setAdminCookie(req, res);
+  return sendJson(res, 200, { ok: true });
+}
+
+function handleAdminLogout(req: IncomingMessage, res: ServerResponse) {
+  if (!originAllowedForAdmin(req)) return sendJson(res, 403, { error: "origin 不被允许" });
+  clearAdminCookie(req, res);
+  return sendJson(res, 200, { ok: true });
+}
+
+async function handleAdminRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (adminDenied(req, res)) return;
+  if (req.method === "GET" && /^\/v1\/admin\/conversations(?:\?.*)?$/.test(req.url || "")) {
+    const url = new URL(req.url || "/v1/admin/conversations", "http://localhost");
+    const labelValue = url.searchParams.get("label") || "";
+    if (labelValue && !["none", "job", "collaboration", "other"].includes(labelValue)) {
+      return sendJson(res, 400, { error: "label 不正确" });
+    }
+    const contactValue = url.searchParams.get("potentialContact");
+    if (contactValue && contactValue !== "true" && contactValue !== "false") {
+      return sendJson(res, 400, { error: "potentialContact 不正确" });
+    }
+    try {
+      const result = await listAdminConversations({
+        limit: Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 50)),
+        offset: Math.min(100_000, Math.max(0, Number(url.searchParams.get("offset")) || 0)),
+        query: (url.searchParams.get("q") || "").slice(0, 200),
+        label: labelValue as "none" | "job" | "collaboration" | "other" | "",
+        potentialContact: contactValue ? contactValue === "true" : undefined,
+      });
+      return sendJson(res, 200, result);
+    } catch (error) {
+      console.error("Unable to list archived conversations", error);
+      return sendJson(res, 503, { error: "对话归档暂时不可用" });
+    }
+  }
+
+  const detailMatch = req.url?.match(/^\/v1\/admin\/conversations\/([a-zA-Z0-9_-]{8,128})(?:\?.*)?$/);
+  if (detailMatch && req.method === "GET") {
+    try {
+      const result = await getAdminConversation(detailMatch[1]);
+      return result ? sendJson(res, 200, result) : sendJson(res, 404, { error: "conversation_not_found" });
+    } catch (error) {
+      console.error("Unable to read archived conversation", error);
+      return sendJson(res, 503, { error: "对话归档暂时不可用" });
+    }
+  }
+
+  if (detailMatch && req.method === "PATCH") {
+    let input: unknown;
+    try { input = await readJson(req, 8_192); } catch { return sendJson(res, 400, { error: "请求格式不正确" }); }
+    const body = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+    const labels = ["none", "job", "collaboration", "other"];
+    const statuses = ["unreviewed", "reviewing", "reviewed"];
+    const qualities = ["unrated", "good", "needs_improvement"];
+    const validLabel = body.label === undefined || labels.includes(String(body.label));
+    const validStatus = body.reviewStatus === undefined || statuses.includes(String(body.reviewStatus));
+    const validQuality = body.quality === undefined || qualities.includes(String(body.quality));
+    const validNotes = body.notes === undefined || (typeof body.notes === "string" && body.notes.length <= 4_000);
+    if (!validLabel || !validStatus || !validQuality || !validNotes || (body.label === undefined && body.reviewStatus === undefined && body.quality === undefined && body.notes === undefined)) {
+      return sendJson(res, 400, { error: "label、reviewStatus 或 notes 不正确" });
+    }
+    try {
+      const conversation = await updateAdminConversation(detailMatch[1], {
+        label: body.label as "none" | "job" | "collaboration" | "other" | undefined,
+        reviewStatus: body.reviewStatus as "unreviewed" | "reviewing" | "reviewed" | undefined,
+        quality: body.quality as "unrated" | "good" | "needs_improvement" | undefined,
+        notes: body.notes as string | undefined,
+      });
+      return conversation ? sendJson(res, 200, { conversation }) : sendJson(res, 404, { error: "conversation_not_found" });
+    } catch (error) {
+      console.error("Unable to update archived conversation", error);
+      return sendJson(res, 503, { error: "对话归档暂时不可用" });
+    }
+  }
+
+  sendJson(res, 404, { error: "not_found" });
 }
 
 const server = createServer(async (req, res) => {
   setCors(req, res);
   if (req.method === "OPTIONS") return res.end();
   if (!originAllowed(req.headers.origin)) return sendJson(res, 403, { error: "origin 不被允许" });
-  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, { ok: true, provider: config.defaultProvider, model: config.defaultProvider === "deepseek" ? config.deepseek.model : config.gptproto.model, corpusFacts: facts.length });
+  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, { ok: true, provider: config.defaultProvider, model: config.defaultProvider === "deepseek" ? config.deepseek.model : config.gptproto.model, corpusFacts: facts.length, archiveEnabled: archiveEnabled() });
+  if (req.method === "GET" && req.url === "/v1/warmup") {
+    try { return sendJson(res, 200, await warmArchive()); }
+    catch (error) {
+      console.error("Archive warmup failed", error);
+      return sendJson(res, 503, { ok: false, archived: true });
+    }
+  }
   if (req.method === "POST" && req.url === "/v1/chat") return handleChat(req, res);
+  if (req.method === "POST" && req.url === "/v1/admin/login") return handleAdminLogin(req, res);
+  if (req.method === "POST" && req.url === "/v1/admin/logout") return handleAdminLogout(req, res);
+  if (req.url?.startsWith("/v1/admin/conversations")) return handleAdminRequest(req, res);
   return sendJson(res, 404, { error: "not_found" });
 });
 

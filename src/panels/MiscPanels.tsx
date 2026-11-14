@@ -148,10 +148,12 @@ const AGENT_API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)
 const IM_URL = (import.meta.env.VITE_IM_URL as string | undefined) || "https://im.mout.me/?source=homepage";
 
 async function streamHomepageAgent(
+  conversationId: string,
   message: string,
   history: LiveMessage[],
   onDelta: (text: string) => void,
   onStatus: (status: "searching" | "answering") => void,
+  onArchiveWarning: (message: string) => void,
 ) {
   if (!AGENT_API_URL) {
     const lower = message.toLowerCase();
@@ -174,7 +176,7 @@ async function streamHomepageAgent(
   const response = await fetch(`${AGENT_API_URL}/v1/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: "casual", source: "homepage" }),
+    body: JSON.stringify({ conversationId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: "casual", source: "homepage" }),
   });
   if (!response.ok || !response.body) throw new Error(`分身暂时无法连接（${response.status}）`);
   const reader = response.body.getReader();
@@ -193,6 +195,7 @@ async function streamHomepageAgent(
         const event = JSON.parse(raw) as { type?: string; value?: string; text?: string; message?: string };
         if (event.type === "status" && (event.value === "searching" || event.value === "answering")) onStatus(event.value);
         if (event.type === "delta" && event.text) onDelta(event.text);
+        if (event.type === "archive_warning") onArchiveWarning(event.message || "本轮对话暂时没有归档");
         if (event.type === "error") throw new Error(event.message || "分身暂时无法回答");
       } catch (error) {
         if (error instanceof SyntaxError) continue;
@@ -204,27 +207,38 @@ async function streamHomepageAgent(
 }
 
 export function ChatPanel() {
+  const [conversationId] = useState(() => window.crypto?.randomUUID?.() ?? `homepage-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"searching" | "answering" | "idle">("idle");
   const [error, setError] = useState("");
+  const [archiveWarning, setArchiveWarning] = useState("");
+
+  useEffect(() => {
+    if (!AGENT_API_URL) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8_000);
+    fetch(`${AGENT_API_URL}/v1/warmup`, { signal: controller.signal }).catch(() => {}).finally(() => window.clearTimeout(timer));
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, []);
 
   const ask = async (value: string) => {
     const content = value.trim();
     if (!content || busy) return;
     setInput("");
     setError("");
+    setArchiveWarning("");
     const assistant: LiveMessage = { role: "assistant", content: "", pending: true };
     const next = [...messages, { role: "user" as const, content }, assistant];
     setMessages(next);
     setBusy(true);
     setStatus("answering");
     try {
-      await streamHomepageAgent(content, next.slice(0, -1), (text) => {
+      await streamHomepageAgent(conversationId, content, next.slice(0, -1), (text) => {
         assistant.content += text;
         setMessages([...next.slice(0, -1), { ...assistant }]);
-      }, setStatus);
+      }, setStatus, setArchiveWarning);
       assistant.pending = false;
       setMessages([...next.slice(0, -1), { ...assistant }]);
     } catch (reason) {
@@ -247,6 +261,7 @@ export function ChatPanel() {
         ))}
         {status === "searching" && <p className="chat-status">正在查找公开来源…</p>}
         {error && <p className="chat-error">{error}</p>}
+        {archiveWarning && <p className="chat-status">{archiveWarning}</p>}
       </div>
       <form className="chat-form" onSubmit={(event) => { event.preventDefault(); void ask(input); }}>
         <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="问我做过什么，或者为什么这样想…" aria-label="输入问题" disabled={busy} />
