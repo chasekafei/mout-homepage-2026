@@ -14,6 +14,8 @@
 
 DeepSeek 官方 API 作为第二个 provider，通过 `DEFAULT_PROVIDER=deepseek` 或请求级 provider 选择。浏览器永远不接触任意 provider 的 API key。
 
+每次请求还会注入服务端当前时间、`AGENT_TIMEZONE` 指定的 MouT 默认时区、访客浏览器时区、星期、可推导的农历日期和常见节日。中国法定节假日的调休安排不会由模型猜测，只有在联网搜索得到可信来源时才使用。
+
 ## 本地运行
 
 先在 `services/agent-api/.env` 中填写至少一个 provider 的 key：

@@ -8,6 +8,7 @@ import {
   factContext,
   retrieveFacts,
   shouldSearch,
+  buildRuntimeContext,
   type AgentRequest,
   type ChatMessage,
 } from "@mout/agent-core";
@@ -79,7 +80,7 @@ function asRequest(value: unknown): AgentRequest {
   if (conversationId && !/^[a-zA-Z0-9_-]{8,128}$/.test(conversationId)) throw new Error("conversationId 格式不正确");
   const provider = input.provider === "deepseek" ? "deepseek" : input.provider === "gptproto" ? "gptproto" : undefined;
   const mode = input.mode === "about" || input.mode === "work" || input.mode === "opinion" || input.mode === "casual" ? input.mode : "casual";
-  return { message, conversationId, history: Array.isArray(input.history) ? input.history as ChatMessage[] : [], provider, mode, model: typeof input.model === "string" ? input.model : undefined, source: input.source === "homepage" ? "homepage" : "im" };
+  return { message, conversationId, timezone: typeof input.timezone === "string" ? input.timezone : undefined, history: Array.isArray(input.history) ? input.history as ChatMessage[] : [], provider, mode, model: typeof input.model === "string" ? input.model : undefined, source: input.source === "homepage" ? "homepage" : "im" };
 }
 
 async function handleChat(req: IncomingMessage, res: ServerResponse) {
@@ -90,8 +91,9 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   const provider = input.provider || config.defaultProvider;
   const search = shouldSearch(input.message);
   const selectedFacts = retrieveFacts(input.message, facts, config.maxContextFacts);
+  const runtimeContext = buildRuntimeContext(new Date(), config.timeZone, input.timezone);
   const messages: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(input.mode, factContext(selectedFacts)) },
+    { role: "system", content: buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext) },
     ...clampHistory(input.history, config.maxHistoryMessages),
     { role: "user", content: input.message },
   ];

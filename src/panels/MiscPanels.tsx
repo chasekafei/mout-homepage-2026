@@ -174,7 +174,7 @@ async function streamHomepageAgent(
   const response = await fetch(`${AGENT_API_URL}/v1/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ message, history, mode: "casual", source: "homepage" }),
+    body: JSON.stringify({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: "casual", source: "homepage" }),
   });
   if (!response.ok || !response.body) throw new Error(`分身暂时无法连接（${response.status}）`);
   const reader = response.body.getReader();

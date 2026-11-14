@@ -7,6 +7,7 @@ export const config = {
   port: Number(process.env.PORT || 8787),
   allowedOrigins: csv(process.env.ALLOWED_ORIGINS, ["http://localhost:5173", "http://localhost:5174"]),
   defaultProvider: (process.env.DEFAULT_PROVIDER || "gptproto") as ProviderName,
+  timeZone: process.env.AGENT_TIMEZONE || "Asia/Shanghai",
   gptproto: {
     apiKey: process.env.GPTPROTO_API_KEY || "",
     baseUrl: process.env.GPTPROTO_BASE_URL || "https://gptproto.com/v1",

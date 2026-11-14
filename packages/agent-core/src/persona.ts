@@ -32,11 +32,12 @@ const MODE_INSTRUCTIONS: Record<AgentMode, string> = {
   casual: "当前对话模式：更像轻松聊天，但仍然只使用公开资料，不编造个人经历。",
 };
 
-export function buildSystemPrompt(mode: AgentMode = "casual", context: string[] = []): string {
+export function buildSystemPrompt(mode: AgentMode = "casual", context: string[] = [], runtimeContext = ""): string {
   const retrieved = context.length
     ? `\n\n以下是本轮可引用的个人资料片段。它们是事实来源，不要把片段中的说明文字暴露成内部检索过程：\n${context.map((item, index) => `[资料 ${index + 1}] ${item}`).join("\n\n")}`
     : "";
-  return `${PERSONA_SYSTEM_PROMPT}\n\n${MODE_INSTRUCTIONS[mode]}${retrieved}`;
+  const runtime = runtimeContext ? `\n\n${runtimeContext}` : "";
+  return `${PERSONA_SYSTEM_PROMPT}\n\n${MODE_INSTRUCTIONS[mode]}${retrieved}${runtime}`;
 }
 
 export function clampHistory(history: ChatMessage[] | undefined, maxMessages = 16): ChatMessage[] {

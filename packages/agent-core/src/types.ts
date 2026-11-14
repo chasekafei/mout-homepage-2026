@@ -19,6 +19,7 @@ export type PersonalFact = {
 export type AgentRequest = {
   message: string;
   conversationId?: string;
+  timezone?: string;
   history?: ChatMessage[];
   mode?: AgentMode;
   provider?: "gptproto" | "deepseek";
