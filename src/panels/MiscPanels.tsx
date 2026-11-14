@@ -142,27 +142,120 @@ const FAQ = [
   { q: "那两只猫叫什么？", a: "烧酒是狸花猫，小八是英短蓝白。在这个房间里，一个在桌角卷成一团，一个摊在麦克风旁边。" },
 ];
 
+type LiveMessage = { role: "user" | "assistant"; content: string; pending?: boolean };
+
+const AGENT_API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
+const IM_URL = (import.meta.env.VITE_IM_URL as string | undefined) || "https://im.mout.me/?source=homepage";
+
+async function streamHomepageAgent(
+  message: string,
+  history: LiveMessage[],
+  onDelta: (text: string) => void,
+  onStatus: (status: "searching" | "answering") => void,
+) {
+  if (!AGENT_API_URL) {
+    const lower = message.toLowerCase();
+    const answer = lower.includes("猫")
+      ? "烧酒是狸花猫，小八是英短蓝白。在网站的不同房间里，它们会出现在不同的位置。"
+      : lower.includes("crosspod")
+        ? "因为看到一篇文章时，我更想听听身边某个人的看法。CrossPod 让你用朋友的分身开一期播客，它不一定最专业，但希望最像真实朋友。"
+        : lower.includes("agent") || lower.includes("分身")
+      ? "我一直觉得，Agent 最重要的不是工具数量，而是它能不能进入真实的 context。做 Super Intern 的时候，我更在意 Agent 能不能待在用户已经在用的 Discord、Telegram 和工作流里。"
+      : lower.includes("产品") || lower.includes("经历") || lower.includes("什么") || lower.includes("工作")
+        ? "我做过 AI 拍照社交、AI VTuber、AI 信息社区和 Super Intern。它们看起来跨度很大，但我一直在追同一个问题：AI 怎么进入人已经在用的场景。"
+        : "可以问我做过什么、为什么一直做 AI Agent，或者我怎么看待产品和设计。如果资料里没有，我会明确说不知道。";
+    for (const part of answer.split(/(?<=[，。！？；：])/u)) {
+      onDelta(part);
+      await new Promise((resolve) => window.setTimeout(resolve, 24));
+    }
+    return;
+  }
+
+  const response = await fetch(`${AGENT_API_URL}/v1/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify({ message, history, mode: "casual", source: "homepage" }),
+  });
+  if (!response.ok || !response.body) throw new Error(`分身暂时无法连接（${response.status}）`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === "[DONE]") continue;
+      try {
+        const event = JSON.parse(raw) as { type?: string; value?: string; text?: string; message?: string };
+        if (event.type === "status" && (event.value === "searching" || event.value === "answering")) onStatus(event.value);
+        if (event.type === "delta" && event.text) onDelta(event.text);
+        if (event.type === "error") throw new Error(event.message || "分身暂时无法回答");
+      } catch (error) {
+        if (error instanceof SyntaxError) continue;
+        throw error;
+      }
+    }
+    if (done) break;
+  }
+}
+
 export function ChatPanel() {
-  const [asked, setAsked] = useState<number[]>([]);
+  const [messages, setMessages] = useState<LiveMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"searching" | "answering" | "idle">("idle");
+  const [error, setError] = useState("");
+
+  const ask = async (value: string) => {
+    const content = value.trim();
+    if (!content || busy) return;
+    setInput("");
+    setError("");
+    const assistant: LiveMessage = { role: "assistant", content: "", pending: true };
+    const next = [...messages, { role: "user" as const, content }, assistant];
+    setMessages(next);
+    setBusy(true);
+    setStatus("answering");
+    try {
+      await streamHomepageAgent(content, next.slice(0, -1), (text) => {
+        assistant.content += text;
+        setMessages([...next.slice(0, -1), { ...assistant }]);
+      }, setStatus);
+      assistant.pending = false;
+      setMessages([...next.slice(0, -1), { ...assistant }]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "分身暂时无法连接");
+      setMessages(next.slice(0, -1));
+    } finally {
+      setBusy(false);
+      setStatus("idle");
+    }
+  };
+
   return (
-    <div className="chat">
-      <p className="lede">
-        几年前我用 Dify 做过一个“个人 AI 分身”，面试和认识新朋友时会把链接发过去：“如果我不在，你可以先和我的分身聊。”
-        新的分身正在用这个网站里的资料重新训练。在它上线之前，先回答几个常被问到的问题。
-      </p>
+    <div className="chat chat-live">
+      <p className="lede">几年前我用 Dify 做过一个“个人 AI 分身”。现在它住进了这个网站：你可以问我的经历、做过的产品和一些公开表达过的观点。</p>
       <div className="chat-log" aria-live="polite">
-        {asked.map((i) => (
-          <div key={i} className="qa">
-            <p className="bubble bubble-q">{FAQ[i].q}</p>
-            <p className="bubble bubble-a">{FAQ[i].a}</p>
+        {messages.map((message, index) => (
+          <div key={`${message.role}-${index}`} className={`qa qa-${message.role}`}>
+            <p className={`bubble bubble-${message.role === "user" ? "q" : "a"}`}>{message.content}{message.pending && <span className="chat-caret" />}</p>
           </div>
         ))}
+        {status === "searching" && <p className="chat-status">正在查找公开来源…</p>}
+        {error && <p className="chat-error">{error}</p>}
       </div>
+      <form className="chat-form" onSubmit={(event) => { event.preventDefault(); void ask(input); }}>
+        <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="问我做过什么，或者为什么这样想…" aria-label="输入问题" disabled={busy} />
+        <button type="submit" className="chip" disabled={busy || !input.trim()}>{busy ? "回答中" : "发送"}</button>
+      </form>
       <div className="chat-chips">
-        {FAQ.map((f, i) => !asked.includes(i) && (
-          <button type="button" key={f.q} className="chip" onClick={() => setAsked([...asked, i])}>{f.q}</button>
-        ))}
+        {FAQ.map((f) => <button type="button" key={f.q} className="chip" onClick={() => void ask(f.q)} disabled={busy}>{f.q}</button>)}
       </div>
+      <a className="chat-open" href={IM_URL} target="_blank" rel="noreferrer">打开完整的分身页面 ↗</a>
     </div>
   );
 }

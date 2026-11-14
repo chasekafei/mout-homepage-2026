@@ -14,6 +14,14 @@ pnpm dev          # http://localhost:5173
 pnpm build        # 类型检查 + 产物输出到 dist/
 ```
 
+## 个人 Agent
+
+个人 Agent 采用同仓库 mono repo 结构：独立聊天页在 `apps/im`，模型调用和联网搜索在 `services/agent-api`，人格规则与公开资料在 `packages/agent-core` 和 `content/agent-public`。默认使用 GPT Proto 的 `gemini-3.8-flash`，DeepSeek 官方 API 作为可切换 provider。详细的环境变量、运行方式和发布前检查见 [`docs/agent/README.md`](docs/agent/README.md)。
+
+```bash
+pnpm build:all     # 首页、独立聊天页、Agent core 和 API 的检查
+```
+
 ## 目录
 
 | 路径 | 内容 |
