@@ -109,6 +109,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 .searching-state { display: inline-flex; align-items: center; gap: 9px; margin-top: 8px; color: var(--mint); font-size: 13px; }
 .searching-pulse { width: 7px; height: 7px; border: 1px solid var(--mint); border-radius: 50%; box-shadow: 0 0 0 4px rgba(110,224,198,.1); animation: pulse 1.5s ease-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: .65; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.15); } }
+.thinking-state { display: inline-flex; align-items: baseline; margin-top: 8px; color: var(--muted); font-size: 13px; }
+.thinking-dots { display: inline-block; width: 18px; overflow: hidden; color: var(--mint); animation: thinking-dots 1.2s steps(4, end) infinite; }
+@keyframes thinking-dots { 0% { width: 0; } 33% { width: 6px; } 66% { width: 12px; } 100% { width: 18px; } }
 .inline-sources { display: inline-flex; align-items: center; gap: 6px; margin-top: 13px; border: 0; border-bottom: 1px solid rgba(110,224,198,.35); padding: 0 0 2px; background: none; color: var(--mint); font-size: 11px; }
 .inline-sources:hover { border-color: var(--mint); }
 .error-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 24px 48px; padding: 10px 12px; border-left: 2px solid var(--coral); background: rgba(231,123,91,.08); color: var(--muted-2); font-size: 12px; }

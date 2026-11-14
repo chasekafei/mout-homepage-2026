@@ -33,7 +33,7 @@ function textFromUnknown(value: unknown): string | undefined {
 }
 
 function parseSseBlock(block: string): ProviderEvent | null {
-  const data = block.split("\n").find((line) => line.startsWith("data:"))?.slice(5).trim();
+  const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n").trim();
   if (!data || data === "[DONE]") return data === "[DONE]" ? { type: "done" } : null;
   try {
     const payload = JSON.parse(data) as Record<string, any>;
@@ -48,7 +48,7 @@ function parseSseBlock(block: string): ProviderEvent | null {
     }
     const choice = payload.choices?.[0];
     const chatDelta = textFromUnknown(choice?.delta?.content) ?? textFromUnknown(choice?.message?.content);
-    const responseDelta = textFromUnknown(payload.delta) ?? textFromUnknown(payload.output_text_delta) ?? textFromUnknown(payload.output_text);
+    const responseDelta = textFromUnknown(payload.delta) ?? textFromUnknown(payload.output_text_delta);
     const text = chatDelta ?? responseDelta;
     if (text) return { type: "delta", text };
     if (payload.type === "response.web_search_call.in_progress" || payload.type === "response.web_search_call.searching") {
@@ -71,7 +71,7 @@ async function* parseStream(response: Response): AsyncGenerator<ProviderEvent> {
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const blocks = buffer.split(/\n\n+/);
+    const blocks = buffer.split(/\r?\n\r?\n+/);
     buffer = blocks.pop() || "";
     for (const block of blocks) {
       const event = parseSseBlock(block);

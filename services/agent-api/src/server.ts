@@ -98,10 +98,17 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Encoding", "identity");
+  res.socket?.setNoDelay(true);
   res.flushHeaders?.();
+  // A short SSE comment makes small early events pass through buffering proxies.
+  res.write(`: stream-open${" ".repeat(2048)}\n\n`);
   res.write(sseEvent({ type: "status", value: search ? "searching" : "answering" }));
   for await (const event of streamProvider(provider, { messages, model: providerModel(provider, input.model), stream: true, useWebSearch: search })) {
     res.write(sseEvent(event));
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   res.end();
 }
@@ -116,4 +123,4 @@ const server = createServer(async (req, res) => {
 });
 
 facts = await loadFacts();
-server.listen(config.port, () => console.log(`Agent API listening on http://localhost:${config.port}`));
+server.listen(config.port, "0.0.0.0", () => console.log(`Agent API listening on http://0.0.0.0:${config.port}`));

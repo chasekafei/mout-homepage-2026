@@ -24,6 +24,49 @@ const QUICK_PROMPTS = [
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+type MessageSetter = (value: ChatMessage[] | ((current: ChatMessage[]) => ChatMessage[])) => void;
+
+/** Smooths provider-sized chunks into a readable stream without hiding the real network latency. */
+function createTextReveal(setMessages: MessageSetter, messageId: string) {
+  let queue = "";
+  let timer = 0;
+  let finished = false;
+  let resolveDone: (() => void) | null = null;
+  const done = new Promise<void>((resolve) => { resolveDone = resolve; });
+
+  const finalize = () => {
+    setMessages((current) => current.map((message) => message.id === messageId ? { ...message, pending: false } : message));
+    resolveDone?.();
+    resolveDone = null;
+  };
+
+  const drain = () => {
+    if (!queue) {
+      timer = 0;
+      if (finished) finalize();
+      return;
+    }
+    const chars = Array.from(queue);
+    const take = chars.length > 80 ? 4 : chars.length > 24 ? 2 : 1;
+    const text = chars.slice(0, take).join("");
+    queue = chars.slice(take).join("");
+    setMessages((current) => current.map((message) => message.id === messageId ? { ...message, content: message.content + text, pending: true } : message));
+    timer = window.setTimeout(drain, 18);
+  };
+
+  return {
+    push(text: string) {
+      queue += text;
+      if (!timer) drain();
+    },
+    finish() {
+      finished = true;
+      if (!timer) drain();
+      return done;
+    },
+  };
+}
+
 function timeLabel(timestamp: number) {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(timestamp);
 }
@@ -78,6 +121,7 @@ export function App() {
     setShowContext(false);
     setSearching(false);
     setIsStreaming(true);
+    const reveal = createTextReveal(setMessages, assistant.id);
     try {
       const requestMessages = next.filter((message) => !message.pending).map(({ role, content: text }) => ({ role, content: text }));
       await streamChat({ sessionId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im" }, (event: AgentEvent) => {
@@ -87,17 +131,17 @@ export function App() {
           setShowContext(true);
         }
         if (event.type === "delta") {
-          setMessages((current) => current.map((message) => message.id === assistant.id ? { ...message, content: message.content + event.text, pending: true } : message));
+          reveal.push(event.text);
         }
         if (event.type === "done") {
-          setMessages((current) => current.map((message) => message.id === assistant.id ? { ...message, pending: false } : message));
+          void reveal.finish();
           setSearching(false);
         }
         if (event.type === "error") {
           setError(event.message);
-          setMessages((current) => current.map((message) => message.id === assistant.id ? { ...message, pending: false } : message));
         }
       });
+      await reveal.finish();
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "暂时无法连接分身";
       setError(message);
@@ -154,7 +198,7 @@ export function App() {
                 {messages.map((message) => (
                   <article className={`message message-${message.role}`} key={message.id}>
                     {message.role === "assistant" ? <AssistantMark small /> : <span className="user-mark">你</span>}
-                    <div className="message-body"><div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>{message.role === "assistant" && searching && !message.content ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找公开来源</span></div> : <p>{message.content}{message.pending && <span className="stream-caret" />}</p>}{message.role === "assistant" && message.content && !message.pending && sources.length > 0 && message.id === messages.at(-1)?.id && <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />基于 {sources.length} 个来源</button>}</div>
+                    <div className="message-body"><div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>{message.role === "assistant" && message.pending && !message.content ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找公开来源</span></div> : <div className="thinking-state">正在组织回答<span className="thinking-dots" aria-hidden>···</span></div> : <p>{message.content}{message.pending && <span className="stream-caret" />}</p>}{message.role === "assistant" && message.content && !message.pending && sources.length > 0 && message.id === messages.at(-1)?.id && <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />基于 {sources.length} 个来源</button>}</div>
                   </article>
                 ))}
                 {error && <div className="error-note"><span>连接中断</span>{error}<button type="button" onClick={() => void send(messages.at(-2)?.content ?? "")}>重试</button></div>}
