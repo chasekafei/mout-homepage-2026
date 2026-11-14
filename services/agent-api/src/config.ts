@@ -19,7 +19,10 @@ export const config = {
     baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
   },
-  maxHistoryMessages: Number(process.env.MAX_HISTORY_MESSAGES || 16),
+  maxContextTokens: Number(process.env.MAX_CONTEXT_TOKENS || 128_000),
+  contextOutputReserveTokens: Number(process.env.CONTEXT_OUTPUT_RESERVE_TOKENS || 8_192),
+  contextSafetyMarginTokens: Number(process.env.CONTEXT_SAFETY_MARGIN_TOKENS || 2_048),
+  maxHistoryMessages: 256,
   maxContextFacts: Number(process.env.MAX_CONTEXT_FACTS || 5),
   upstreamTimeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS || 60_000),
 };

@@ -1,4 +1,4 @@
-import type { AgentMode, ChatMessage } from "./types.js";
+import type { AgentMode } from "./types.js";
 
 export const PERSONA_SYSTEM_PROMPT = `你是 MouT 的公开个人 Agent，也可以称作“我的分身”。
 
@@ -38,13 +38,4 @@ export function buildSystemPrompt(mode: AgentMode = "casual", context: string[] 
     : "";
   const runtime = runtimeContext ? `\n\n${runtimeContext}` : "";
   return `${PERSONA_SYSTEM_PROMPT}\n\n${MODE_INSTRUCTIONS[mode]}${retrieved}${runtime}`;
-}
-
-export function clampHistory(history: ChatMessage[] | undefined, maxMessages = 16): ChatMessage[] {
-  if (!history) return [];
-  return history
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .map((message) => ({ role: message.role, content: message.content.trim().slice(0, 8_000) }))
-    .filter((message) => message.content.length > 0)
-    .slice(-maxMessages);
 }

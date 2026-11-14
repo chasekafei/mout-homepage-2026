@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { selectHistoryWithinBudget } from "@mout/agent-core";
 import { AgentEvent, AgentMode, AgentSource, ChatMessage, isMockMode, streamChat } from "./api";
 import "./styles.css";
 
@@ -24,7 +25,10 @@ const QUICK_PROMPTS = [
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const CONVERSATIONS_KEY = "mout.im.conversations.v1";
-const MAX_STORED_MESSAGES = 80;
+const MAX_STORED_MESSAGES = 256;
+const MAX_CONVERSATIONS = 12;
+const ACTIVE_STORAGE_BUDGET = 116_000;
+const ARCHIVE_STORAGE_BUDGET = 12_000;
 
 type StoredConversation = {
   id: string;
@@ -64,7 +68,7 @@ function loadConversationState(): ConversationState {
         messages: Array.isArray(item.messages) ? item.messages.filter((message): message is ChatMessage => (
           !!message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string"
         )).map((message) => ({ ...message, pending: false })).slice(-MAX_STORED_MESSAGES) : [],
-      }))
+      })).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS)
       : [];
     if (!conversations.length) return { activeId: fallback.id, conversations: [fallback] };
     const activeId = typeof parsed.activeId === "string" && conversations.some((item) => item.id === parsed.activeId)
@@ -178,7 +182,24 @@ export function App() {
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversationState)), 250);
+    const timer = window.setTimeout(() => {
+      const conversations = [...conversationState.conversations]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, MAX_CONVERSATIONS)
+        .map((conversation) => ({
+          ...conversation,
+          messages: selectHistoryWithinBudget(
+            conversation.messages,
+            conversation.id === conversationState.activeId ? ACTIVE_STORAGE_BUDGET : ARCHIVE_STORAGE_BUDGET,
+            MAX_STORED_MESSAGES,
+          ),
+        }));
+      try {
+        localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify({ activeId: conversationState.activeId, conversations }));
+      } catch {
+        // Persistence must not interrupt the live conversation if browser storage is full or disabled.
+      }
+    }, 250);
     return () => window.clearTimeout(timer);
   }, [conversationState]);
 
@@ -204,7 +225,7 @@ export function App() {
   const startNewConversation = () => {
     if (isStreaming) return;
     const conversation = newConversation();
-    setConversationState((state) => ({ activeId: conversation.id, conversations: [conversation, ...state.conversations] }));
+    setConversationState((state) => ({ activeId: conversation.id, conversations: [conversation, ...state.conversations].slice(0, MAX_CONVERSATIONS) }));
     setMode("profile");
     setSources([]);
     setError("");
@@ -356,7 +377,7 @@ export function App() {
           <div className="history-list">
             {conversationState.conversations.map((conversation) => <button key={conversation.id} className={`history-item ${conversation.id === conversationState.activeId ? "is-active" : ""}`} type="button" onClick={() => switchConversation(conversation.id)}><strong>{conversation.title}</strong><small>{conversation.messages.length ? `${Math.ceil(conversation.messages.length / 2)} 条消息 · ` : "空对话 · "}{conversationDate(conversation.updatedAt)}</small></button>)}
           </div>
-          <p className="history-note">对话保存在当前浏览器中。每次回答会带入最近约 8 轮上下文。</p>
+          <p className="history-note">对话保存在当前浏览器中。每次回答会按上下文预算带入最近的完整问答轮次。</p>
         </aside>
       </>}
       <footer className="im-footer"><span>一个个人网站里的小小 Agent</span><span className="footer-rule" /><a href="mailto:hello@mout.me">联系 MouT</a></footer>

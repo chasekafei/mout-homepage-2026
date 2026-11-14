@@ -4,9 +4,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
   buildSystemPrompt,
-  clampHistory,
+  estimateTextTokens,
   factContext,
   retrieveFacts,
+  selectHistoryWithinBudget,
   shouldSearch,
   buildRuntimeContext,
   type AgentRequest,
@@ -44,7 +45,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-async function readJson(req: IncomingMessage, maxBytes = 128_000): Promise<unknown> {
+async function readJson(req: IncomingMessage, maxBytes = 1_500_000): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -92,9 +93,19 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   const search = shouldSearch(input.message);
   const selectedFacts = retrieveFacts(input.message, facts, config.maxContextFacts);
   const runtimeContext = buildRuntimeContext(new Date(), config.timeZone, input.timezone);
+  const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext);
+  const currentMessageTokens = estimateTextTokens(input.message) + 8;
+  const historyBudget = Math.max(0,
+    config.maxContextTokens
+      - config.contextOutputReserveTokens
+      - config.contextSafetyMarginTokens
+      - estimateTextTokens(systemPrompt)
+      - currentMessageTokens,
+  );
+  const history = selectHistoryWithinBudget(input.history, historyBudget, config.maxHistoryMessages);
   const messages: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext) },
-    ...clampHistory(input.history, config.maxHistoryMessages),
+    { role: "system", content: systemPrompt },
+    ...history,
     { role: "user", content: input.message },
   ];
 
