@@ -75,9 +75,11 @@ function asRequest(value: unknown): AgentRequest {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const message = typeof input.message === "string" ? input.message.trim() : "";
   if (!message || message.length > 8_000) throw new Error("message 必须是 1 到 8000 个字符");
+  const conversationId = typeof input.conversationId === "string" ? input.conversationId.trim() : undefined;
+  if (conversationId && !/^[a-zA-Z0-9_-]{8,128}$/.test(conversationId)) throw new Error("conversationId 格式不正确");
   const provider = input.provider === "deepseek" ? "deepseek" : input.provider === "gptproto" ? "gptproto" : undefined;
   const mode = input.mode === "about" || input.mode === "work" || input.mode === "opinion" || input.mode === "casual" ? input.mode : "casual";
-  return { message, history: Array.isArray(input.history) ? input.history as ChatMessage[] : [], provider, mode, model: typeof input.model === "string" ? input.model : undefined, source: input.source === "homepage" ? "homepage" : "im" };
+  return { message, conversationId, history: Array.isArray(input.history) ? input.history as ChatMessage[] : [], provider, mode, model: typeof input.model === "string" ? input.model : undefined, source: input.source === "homepage" ? "homepage" : "im" };
 }
 
 async function handleChat(req: IncomingMessage, res: ServerResponse) {

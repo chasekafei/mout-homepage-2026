@@ -23,6 +23,62 @@ const QUICK_PROMPTS = [
 ];
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const CONVERSATIONS_KEY = "mout.im.conversations.v1";
+const MAX_STORED_MESSAGES = 80;
+
+type StoredConversation = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  mode: AgentMode;
+  messages: ChatMessage[];
+};
+
+type ConversationState = { activeId: string; conversations: StoredConversation[] };
+
+function newConversation(): StoredConversation {
+  return {
+    id: window.crypto?.randomUUID?.() ?? makeId("conversation"),
+    title: "新的对话",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    mode: "profile",
+    messages: [],
+  };
+}
+
+function loadConversationState(): ConversationState {
+  const fallback = newConversation();
+  try {
+    const raw = localStorage.getItem(CONVERSATIONS_KEY);
+    if (!raw) return { activeId: fallback.id, conversations: [fallback] };
+    const parsed = JSON.parse(raw) as Partial<ConversationState>;
+    const conversations = Array.isArray(parsed.conversations)
+      ? parsed.conversations.map((item) => ({
+        id: typeof item.id === "string" ? item.id : makeId("conversation"),
+        title: typeof item.title === "string" ? item.title : "新的对话",
+        createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
+        updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : Date.now(),
+        mode: item.mode === "current" ? "current" as const : "profile" as const,
+        messages: Array.isArray(item.messages) ? item.messages.filter((message): message is ChatMessage => (
+          !!message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string"
+        )).map((message) => ({ ...message, pending: false })).slice(-MAX_STORED_MESSAGES) : [],
+      }))
+      : [];
+    if (!conversations.length) return { activeId: fallback.id, conversations: [fallback] };
+    const activeId = typeof parsed.activeId === "string" && conversations.some((item) => item.id === parsed.activeId)
+      ? parsed.activeId
+      : conversations[0].id;
+    return { activeId, conversations };
+  } catch {
+    return { activeId: fallback.id, conversations: [fallback] };
+  }
+}
+
+function conversationDate(timestamp: number) {
+  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(timestamp);
+}
 
 type MessageSetter = (value: ChatMessage[] | ((current: ChatMessage[]) => ChatMessage[])) => void;
 
@@ -90,23 +146,89 @@ function AssistantMark({ small = false }: { small?: boolean }) {
 export function App() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const cameFromHomepage = params.get("source") === "homepage";
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationState, setConversationState] = useState<ConversationState>(loadConversationState);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<AgentMode>("profile");
+  const activeConversation = conversationState.conversations.find((item) => item.id === conversationState.activeId) ?? conversationState.conversations[0];
+  const messages = activeConversation?.messages ?? [];
+  const [mode, setMode] = useState<AgentMode>(() => activeConversation?.mode ?? "profile");
   const [isStreaming, setIsStreaming] = useState(false);
   const [searching, setSearching] = useState(false);
   const [sources, setSources] = useState<AgentSource[]>([]);
   const [error, setError] = useState("");
   const [showContext, setShowContext] = useState(false);
-  const [sessionId] = useState(() => window.crypto?.randomUUID?.() ?? makeId("session"));
+  const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
+
+  const setMessages: MessageSetter = (value) => {
+    setConversationState((state) => ({
+      ...state,
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== state.activeId) return conversation;
+        const nextMessages = (typeof value === "function" ? value(conversation.messages) : value).slice(-MAX_STORED_MESSAGES);
+        const firstUser = nextMessages.find((message) => message.role === "user");
+        return {
+          ...conversation,
+          title: conversation.title === "新的对话" && firstUser ? firstUser.content.slice(0, 28) : conversation.title,
+          updatedAt: Date.now(),
+          messages: nextMessages,
+        };
+      }),
+    }));
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversationState)), 250);
+    return () => window.clearTimeout(timer);
+  }, [conversationState]);
+
+  useEffect(() => {
+    if (activeConversation) setMode(activeConversation.mode);
+  }, [activeConversation?.id]);
 
   useEffect(() => {
     const node = conversationRef.current;
     if (!node || messages.length === 0) return;
     node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
   }, [messages, searching]);
+
+  const changeMode = (nextMode: AgentMode) => {
+    if (isStreaming) return;
+    setMode(nextMode);
+    setConversationState((state) => ({
+      ...state,
+      conversations: state.conversations.map((conversation) => conversation.id === state.activeId ? { ...conversation, mode: nextMode, updatedAt: Date.now() } : conversation),
+    }));
+  };
+
+  const startNewConversation = () => {
+    if (isStreaming) return;
+    const conversation = newConversation();
+    setConversationState((state) => ({ activeId: conversation.id, conversations: [conversation, ...state.conversations] }));
+    setMode("profile");
+    setSources([]);
+    setError("");
+    setSearching(false);
+    setShowContext(false);
+    setShowHistory(false);
+    inputRef.current?.focus();
+  };
+
+  const switchConversation = (id: string) => {
+    if (isStreaming || id === conversationState.activeId) {
+      setShowHistory(false);
+      return;
+    }
+    const conversation = conversationState.conversations.find((item) => item.id === id);
+    if (!conversation) return;
+    setConversationState((state) => ({ ...state, activeId: id }));
+    setMode(conversation.mode);
+    setSources([]);
+    setError("");
+    setSearching(false);
+    setShowContext(false);
+    setShowHistory(false);
+  };
 
   const send = async (value = input) => {
     const content = value.trim();
@@ -124,7 +246,7 @@ export function App() {
     const reveal = createTextReveal(setMessages, assistant.id);
     try {
       const requestMessages = next.filter((message) => !message.pending).map(({ role, content: text }) => ({ role, content: text }));
-      await streamChat({ sessionId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im" }, (event: AgentEvent) => {
+      await streamChat({ conversationId: conversationState.activeId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im" }, (event: AgentEvent) => {
         if (event.type === "meta") setSearching(Boolean(event.searching));
         if (event.type === "source") {
           setSources((current) => current.some((item) => item.id === event.source.id) ? current : [...current, event.source]);
@@ -169,6 +291,8 @@ export function App() {
         <div className="top-brand"><span className="top-brand-dot" /><span>MouT<em>.me</em></span><small>/ AI clone</small></div>
         <div className="top-actions">
           <span className="connection-state"><i />{isMockMode ? "预览模式" : "在线"}</span>
+          <button className="history-button" type="button" onClick={() => setShowHistory(true)}>历史 {conversationState.conversations.length}</button>
+          <button className="new-chat-button" type="button" onClick={startNewConversation}>新对话</button>
           {messages.length > 0 && <button className="clear-button" type="button" onClick={clear}>清空对话</button>}
         </div>
       </header>
@@ -207,7 +331,7 @@ export function App() {
           </div>
 
           <div className="composer-wrap">
-            <div className="composer-mode"><span className="mode-pulse" /><span>{mode === "profile" ? "公开资料模式" : "实时信息模式"}</span><button type="button" onClick={() => setMode(mode === "profile" ? "current" : "profile")} aria-label="切换回答模式"><Icon name="chevron" size={15} /></button></div>
+            <div className="composer-mode"><span className="mode-pulse" /><span>{mode === "profile" ? "公开资料模式" : "实时信息模式"}</span><button type="button" onClick={() => changeMode(mode === "profile" ? "current" : "profile")} aria-label="切换回答模式"><Icon name="chevron" size={15} /></button></div>
             <form className={`composer ${isStreaming ? "is-streaming" : ""}`} onSubmit={handleSubmit}>
               <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} rows={1} placeholder={mode === "profile" ? "问我做过什么，或者为什么这样想…" : "想查什么最新信息？"} aria-label="输入问题" disabled={isStreaming} />
               <div className="composer-bottom"><span className="composer-hint"><kbd>Enter</kbd> 发送 <span>·</span> <kbd>Shift</kbd><span>+</span><kbd>Enter</kbd> 换行</span><button className="send-button" type="submit" disabled={!input.trim() || isStreaming} aria-label="发送问题"><Icon name="arrow" size={19} /></button></div>
@@ -224,6 +348,17 @@ export function App() {
       </div>
 
       {showContext && <button className="context-scrim" type="button" onClick={() => setShowContext(false)} aria-label="关闭来源面板" />}
+      {showHistory && <>
+        <button className="history-scrim" type="button" onClick={() => setShowHistory(false)} aria-label="关闭历史对话" />
+        <aside className="history-panel" aria-label="历史对话">
+          <div className="history-panel-head"><div><span className="eyebrow">CONVERSATIONS</span><h2>我的对话</h2></div><button type="button" onClick={() => setShowHistory(false)} aria-label="关闭历史对话"><Icon name="close" size={18} /></button></div>
+          <button className="history-new" type="button" onClick={startNewConversation}><span>＋</span>开始新对话</button>
+          <div className="history-list">
+            {conversationState.conversations.map((conversation) => <button key={conversation.id} className={`history-item ${conversation.id === conversationState.activeId ? "is-active" : ""}`} type="button" onClick={() => switchConversation(conversation.id)}><strong>{conversation.title}</strong><small>{conversation.messages.length ? `${Math.ceil(conversation.messages.length / 2)} 条消息 · ` : "空对话 · "}{conversationDate(conversation.updatedAt)}</small></button>)}
+          </div>
+          <p className="history-note">对话保存在当前浏览器中。每次回答会带入最近约 8 轮上下文。</p>
+        </aside>
+      </>}
       <footer className="im-footer"><span>一个个人网站里的小小 Agent</span><span className="footer-rule" /><a href="mailto:hello@mout.me">联系 MouT</a></footer>
     </div>
   );

@@ -26,7 +26,7 @@ export type AgentEvent =
   | { type: "error"; message: string };
 
 type ChatRequest = {
-  sessionId: string;
+  conversationId: string;
   messages: Array<{ role: ChatRole; content: string }>;
   mode: AgentMode;
   source: "im" | "homepage";
@@ -127,7 +127,7 @@ export async function streamChat(request: ChatRequest, onEvent: (event: AgentEve
   const response = await fetch(`${API_URL}/v1/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ message, history, mode: request.mode === "current" ? "casual" : "about", source: request.source }),
+    body: JSON.stringify({ conversationId: request.conversationId, message, history, mode: request.mode === "current" ? "casual" : "about", source: request.source }),
     signal,
   });
   if (!response.ok) throw new Error(`Agent API ${response.status}`);
