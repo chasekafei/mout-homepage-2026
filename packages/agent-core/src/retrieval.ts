@@ -82,6 +82,9 @@ export function rankFacts(query: string | string[], facts: PersonalFact[]): Rank
           }
         }
       }
+      if (fact.recordType === "resume_source" && score > 0) {
+        score += fact.sourceVersion === "2026" ? 32 : fact.sourceVersion === "2024" ? 16 : 0;
+      }
       return { fact, score };
     })
     .sort((a, b) => b.score - a.score
@@ -92,8 +95,8 @@ export function rankFacts(query: string | string[], facts: PersonalFact[]): Rank
 /** Avoids filling the prompt with weak matches when only a few facts are relevant. */
 export function retrieveFacts(query: string | string[], facts: PersonalFact[], limit = 5): PersonalFact[] {
   const ranked = rankFacts(query, facts);
-  const best = ranked[0]?.score ?? 0;
-  if (best < 1.5) return [];
+  const bestScore = ranked[0]?.score ?? 0;
+  if (bestScore < 1.5) return [];
   const selected: PersonalFact[] = [];
   const blogGroupCounts = new Map<string, number>();
   const resumePageCounts = new Map<string, number>();
@@ -131,7 +134,8 @@ export function retrieveFacts(query: string | string[], facts: PersonalFact[], l
     resumeSourceScores.set(fact.id, { fact, score });
   }
 
-  const normalThreshold = Math.max(1.5, best * 0.68);
+  const bestIndexedScore = ranked.find(({ fact }) => fact.recordType !== "resume_source")?.score ?? 0;
+  const normalThreshold = Math.max(1.5, bestIndexedScore * 0.68);
   const resumeBackedSummaries = ranked
     .filter(({ fact, score }) => score >= normalThreshold
       && fact.recordType !== "resume_source"
@@ -169,7 +173,8 @@ export function retrieveFacts(query: string | string[], facts: PersonalFact[], l
 export function factContext(facts: PersonalFact[]): string[] {
   return facts.map((fact) => {
     if (fact.recordType === "resume_source") {
-      return `简历原文摘录（${fact.sourceVersion} 版，PDF 第 ${fact.page} 页；涉及简历经历时必须保留原句措辞）：\n${fact.body}\n来源：${fact.source}`;
+      const location = fact.sourceFormat === "html" ? `HTML 第 ${fact.page} 页` : `PDF 第 ${fact.page} 页`;
+      return `简历原文摘录（${fact.sourceVersion} 版，${location}，${fact.section ?? fact.title}；涉及简历经历时必须保留原句措辞）：\n${fact.title}\n${fact.body}\n来源：${fact.source}`;
     }
     if (fact.recordType === "blog") {
       const date = fact.publishedAt

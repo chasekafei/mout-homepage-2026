@@ -17,7 +17,9 @@ export type PersonalFact = {
   groupId?: string;
   sensitivity?: "personal";
   sourceVersion?: "2021" | "2024" | "2026";
+  sourceFormat?: "pdf" | "html";
   page?: number;
+  section?: string;
   tags: string[];
   keywords?: string[];
   queries?: string[];

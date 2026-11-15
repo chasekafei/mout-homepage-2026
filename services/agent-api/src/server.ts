@@ -178,10 +178,10 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     return {
       id: fact.id,
       title: fact.recordType === "resume_source"
-        ? `简历原文 · ${fact.sourceVersion} · PDF 第 ${fact.page} 页`
+        ? `简历原文 · ${fact.sourceVersion} · ${fact.sourceFormat === "html" ? "HTML" : "PDF"} 第 ${fact.page} 页 · ${fact.title}`
         : fact.recordType === "blog" ? `博客：${fact.title}` : fact.title,
       source: fact.recordType === "resume_source"
-        ? `${fact.source}（PDF 第 ${fact.page} 页）`
+        ? `${fact.source}（${fact.sourceFormat === "html" ? "HTML" : "PDF"} 第 ${fact.page} 页）`
         : fact.recordType === "blog"
           ? `历史博客${fact.publishedAt ? ` · ${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "（日期不确定）" : ""}` : " · 日期未确认"} · ${fact.source}`
           : fact.source,

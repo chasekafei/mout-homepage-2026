@@ -15,5 +15,6 @@ export function hasVerbatimResumeQuote(answer: string, sources: PersonalFact[]):
 }
 
 export function fallbackResumeQuote(source: PersonalFact): string {
-  return `简历原文（${source.sourceVersion} 版，PDF 第 ${source.page} 页）：\n\n「${source.body}」`;
+  const format = source.sourceFormat === "html" ? "HTML" : "PDF";
+  return `简历原文（${source.sourceVersion} 版，${format} 第 ${source.page} 页）：\n\n「${source.body}」`;
 }

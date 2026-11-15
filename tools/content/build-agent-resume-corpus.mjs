@@ -12,10 +12,15 @@ const searchAliases = [
   [/AI\s*VTuber/iu, ["AI 主播", "AI 虚拟主播", "虚拟主播"]],
 ];
 const resumes = [
-  { version: "2026", path: "ref/闫宇琨-AI 产品负责人-2026.09.09.pdf" },
   { version: "2024", path: "ref/闫宇琨-AI产品经理-2024.09.17.pdf" },
   { version: "2021", path: "ref/闫宇琨的个人简历-产品经理方向-2021.pdf" },
 ];
+const currentResumeHtml = "ref/AI产品负责人_设计版简历_v6-打印修复.html";
+const htmlExtractor = join(root, "tools/content/extract-agent-resume-html.py");
+const htmlRecords = JSON.parse(execFileSync("python3", [htmlExtractor, join(root, currentResumeHtml)], {
+  encoding: "utf8",
+  maxBuffer: 8 * 1024 * 1024,
+}));
 
 const normalizePdfGlyphs = (text) => text.replace(/\p{Script=Han}/gu, (character) => character.normalize("NFKC"));
 const compact = (text) => normalizePdfGlyphs(text).toLocaleLowerCase("zh-CN").replace(/[^\p{L}\p{N}]+/gu, "");
@@ -69,6 +74,17 @@ function makeChunks(pageText) {
 
 const records = [];
 const facts = JSON.parse(await readFile(factsPath, "utf8"));
+for (const record of htmlRecords) {
+  const compactBody = compact(`${record.title} ${record.body}`);
+  const aliases = facts
+    .filter((fact) => fact.source.includes("2026"))
+    .filter((fact) => [fact.title, ...(fact.keywords ?? [])]
+      .some((term) => compact(term).length >= 4 && compactBody.includes(compact(term))))
+    .flatMap((fact) => [fact.title, ...(fact.keywords ?? [])])
+    .filter(Boolean);
+  const lexicalAliases = searchAliases.flatMap(([pattern, values]) => pattern.test(normalizePdfGlyphs(`${record.title} ${record.body}`)) ? values : []);
+  records.push({ ...record, keywords: [...new Set([...record.keywords, ...aliases, ...lexicalAliases])] });
+}
 for (const resume of resumes) {
   const pdfPath = join(root, resume.path);
   await readFile(pdfPath);
@@ -86,7 +102,8 @@ for (const resume of resumes) {
         .filter((fact) => fact.source.includes(resume.version))
         .filter((fact) => [fact.title, ...(fact.keywords ?? [])]
           .some((term) => compact(term).length >= 4 && compactBody.includes(compact(term))))
-        .flatMap((fact) => [fact.title, ...(fact.keywords ?? [])]);
+        .flatMap((fact) => [fact.title, ...(fact.keywords ?? [])])
+        .filter(Boolean);
       const normalizedBody = normalizePdfGlyphs(body);
       const lexicalAliases = searchAliases.flatMap(([pattern, values]) => pattern.test(normalizedBody) ? values : []);
       records.push({
@@ -97,6 +114,7 @@ for (const resume of resumes) {
         page,
         title: `${resume.version}版简历 · PDF 第 ${page} 页`,
         body,
+        sourceFormat: "pdf",
         tags: ["简历原文", resume.version, "工作与项目经历"],
         keywords: [...new Set([basename(resume.path, ".pdf"), `简历 ${resume.version}`, ...aliases, ...lexicalAliases])],
         source: `${resume.path}#page=${page}`,

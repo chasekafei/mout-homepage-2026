@@ -92,6 +92,8 @@ test("resume-backed answers retrieve exact excerpts and keep the 2026 wording", 
   const skillQuestion = retrieveFacts("Super Intern 用户创建了多少 Skill", corpus);
   const original = skillQuestion.find((fact) => fact.recordType === "resume_source" && fact.sourceVersion === "2026");
   assert.ok(original);
+  assert.equal(original.sourceFormat, "html");
+  assert.ok((original.page ?? 0) > 0);
   assert.ok(original.body.includes("吸引用户创建专业领域 Skill 上千个"));
   assert.ok(factContext([original]).join("\n").includes(original.body));
   assert.match(factContext([original]).join("\n"), /简历原文摘录/);
@@ -101,11 +103,21 @@ test("resume-backed answers retrieve exact excerpts and keep the 2026 wording", 
   assert.ok(fallbackResumeQuote(original).includes(original.body));
 
   const vtuberQuestion = retrieveFacts("你做过 AI 主播吗", corpus);
-  assert.ok(vtuberQuestion.some((fact) => fact.recordType === "resume_source" && fact.sourceVersion === "2026"));
+  assert.ok(vtuberQuestion.some((fact) => fact.recordType === "resume_source"
+    && fact.sourceVersion === "2026"
+    && fact.sourceFormat === "html"));
+
+  const fakers = resumes.find((fact) => fact.sourceFormat === "html" && fact.title.startsWith("Fakers"));
+  assert.ok(fakers?.body.includes("通过 Multi-Agent 与人类互动、追问和反馈"));
+  assert.ok(fakers?.body.includes("高情感关联的 AI Buddy"));
+  assert.match(fallbackResumeQuote(fakers as PersonalFact), /HTML 第 1 页/);
 
   const allResumeText = resumes.map((fact) => fact.body).join("\n");
   assert.doesNotMatch(allResumeText, /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u);
   assert.doesNotMatch(allResumeText, /QQ\s*\/\s*WeChat\s*[:：]/iu);
+  const currentResumeText = resumes.filter((fact) => fact.sourceVersion === "2026").map((fact) => fact.body).join("\n");
+  assert.ok(resumes.filter((fact) => fact.sourceVersion === "2026").every((fact) => fact.sourceFormat === "html"));
+  assert.doesNotMatch(currentResumeText, /LINK RESERVED|广州 \/ 深圳|把前沿模型能力/u);
 });
 
 test("resume source rules prohibit paraphrasing index summaries as quotations", () => {

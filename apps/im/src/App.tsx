@@ -19,9 +19,9 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 }
 
 const QUICK_PROMPTS = [
-  { label: "你做过哪些 AI 产品？", text: "你做过哪些 AI 产品？" },
-  { label: "为什么一直做 Agent？", text: "你为什么一直在做 Agent？" },
-  { label: "从哪里开始了解你？", text: "如果我想了解你，应该从哪里开始？" },
+  { label: "你可以简单介绍一下自己吗？", text: "你可以简单介绍一下自己吗？" },
+  { label: "你做过哪些产品？", text: "你做过哪些产品？" },
+  { label: "今天有什么 AI 新闻吗？你怎么看？", text: "今天有什么 AI 新闻吗？你怎么看？" },
 ];
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -387,9 +387,9 @@ export function App() {
       <div className="im-layout">
         <aside className="identity-rail" aria-label="分身介绍">
           <div className="portrait-frame"><img src="/avatar-pixel.png" alt="MouT 的完整像素头像" className="pixel" /></div>
-          <div className="identity-copy"><span className="eyebrow">PERSONAL CLONE 01</span><h1>和我的分身聊聊</h1><p>不在的时候，你可以先从这里了解我。</p></div>
-          <div className="identity-note"><span className="quote-mark">“</span><p>表面情绪稳定，脑子里一直在施工。</p><span className="quote-author">— MouT</span></div>
-          <div className="identity-meta"><div><span>身份</span><strong>AI 产品经理</strong></div><div><span>在这里聊</span><strong>经历 · 产品 · 想法</strong></div></div>
+          <div className="identity-copy"><span className="eyebrow">PERSONAL CLONE 01</span><h1>和我的分身聊聊</h1><p>也许分身比我更了解我自己？</p></div>
+          <div className="identity-note"><span className="quote-mark">“</span><p>永远保持对新事物的好奇心，永远保持创作的欲望，永远不为自己设限。</p><span className="quote-author">— MouT</span></div>
+          <div className="identity-meta"><div><span>身份</span><strong>AI 产品 / 设计 / 开发 / 游戏策划</strong></div><div><span>想要聊聊</span><strong>经历 · 产品 · 想法</strong></div></div>
           <a className="studio-link" href="https://mout.me/work" target="_blank" rel="noreferrer"><span>进入我的工作场景</span><Icon name="external" size={15} /></a>
         </aside>
 
@@ -398,9 +398,9 @@ export function App() {
             {messages.length === 0 ? (
               <section className="welcome-view">
                 <div className="welcome-orbit"><div className="orbit-line orbit-line-a" /><div className="orbit-line orbit-line-b" /><AssistantMark /></div>
-                <p className="welcome-kicker">MouT 的公开分身</p>
-                <h2>从一个问题开始，<br /><span>了解我怎么想。</span></h2>
-                <p className="welcome-intro">我会基于自己的经历和公开资料回答。你可以问我做过什么，也可以问我为什么这样做。</p>
+                <p className="welcome-kicker">MouT 的 AI 分身</p>
+                <h2>我是个大 i 人，<br /><span>要不你先开口？</span></h2>
+                <p className="welcome-intro">我会基于自己的经历和知识库回答。你可以问我做过什么，也可以问我为什么这样做。</p>
                 <div className="quick-prompts">{QUICK_PROMPTS.map((prompt) => <button key={prompt.text} type="button" onClick={() => void send(prompt.text)}>{prompt.label}<Icon name="arrow" size={15} /></button>)}</div>
               </section>
             ) : (
@@ -412,7 +412,7 @@ export function App() {
                     <div className="message-body">
                       <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>
                       {message.role === "assistant" && message.pending && !message.content
-                        ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找公开来源</span></div> : <div className="thinking-state">正在组织回答<span className="thinking-dots" aria-hidden>···</span></div>
+                        ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找知识库</span></div> : <div className="thinking-state">i 人组织语言中<span className="thinking-dots" aria-hidden>···</span></div>
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
                       {message.role === "assistant" && message.pending && message.content && <span className="stream-caret" />}
                       {message.role === "assistant" && !!message.sources?.length && <div className="message-sources">
@@ -430,12 +430,12 @@ export function App() {
           </div>
 
           <div className="composer-wrap">
-            <div className="composer-mode"><span className="mode-pulse" /><span>{mode === "profile" ? "公开资料模式" : "实时信息模式"}</span><button type="button" onClick={() => changeMode(mode === "profile" ? "current" : "profile")} aria-label="切换回答模式"><Icon name="chevron" size={15} /></button></div>
+            <div className="composer-mode"><span className="mode-pulse" /><span>{mode === "profile" ? "本地知识库模式" : "实时信息模式"}</span><button type="button" onClick={() => changeMode(mode === "profile" ? "current" : "profile")} aria-label="切换回答模式"><Icon name="chevron" size={15} /></button></div>
             <form className={`composer ${isStreaming ? "is-streaming" : ""}`} onSubmit={handleSubmit}>
               <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} rows={1} placeholder={mode === "profile" ? "问我做过什么，或者为什么这样想…" : "想查什么最新信息？"} aria-label="输入问题" disabled={isStreaming} />
               <div className="composer-bottom"><span className="composer-hint"><kbd>Enter</kbd> 发送 <span>·</span> <kbd>Shift</kbd><span>+</span><kbd>Enter</kbd> 换行</span><button className="send-button" type="submit" disabled={!input.trim() || isStreaming} aria-label="发送问题"><Icon name="arrow" size={19} /></button></div>
             </form>
-            <p className="composer-footnote">这是 MouT 的 AI 分身，回答来自他的公开资料。答案可能会有偏差。</p>
+            <p className="composer-footnote">这是 MouT 的 AI 分身，回答来自本人的知识库。答案可能会有偏差。</p>
           </div>
         </main>
 
@@ -455,10 +455,9 @@ export function App() {
           <div className="history-list">
             {conversationState.conversations.map((conversation) => <button key={conversation.id} className={`history-item ${conversation.id === conversationState.activeId ? "is-active" : ""}`} type="button" onClick={() => switchConversation(conversation.id)}><strong>{conversation.title}</strong><small>{conversation.messages.length ? `${Math.ceil(conversation.messages.length / 2)} 条消息 · ` : "空对话 · "}{conversationDate(conversation.updatedAt)}</small></button>)}
           </div>
-          <p className="history-note">对话保存在当前浏览器中。每次回答会按上下文预算带入最近的完整问答轮次。</p>
         </aside>
       </>}
-      <footer className="im-footer"><span>一个个人网站里的小小 Agent</span><span className="footer-rule" /><a href="mailto:hello@mout.me">联系 MouT</a></footer>
+      <footer className="im-footer"><span>一个个人网站里的小小 Agent</span><span className="footer-rule" /><a href="mailto:chasekafei@gmail.com">联系 MouT</a></footer>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Agent 公开知识库
 
-API 会把 `facts.json`、`blog.json` 和 `resume-source.json` 加载成同一个可检索语料。`facts.json` 是主题索引和摘要；`blog.json` 是博客清理拆分后的原文片段；`resume-source.json` 保存三版简历的原文片段、版本、页码和 PDF 来源。
+API 会把 `facts.json`、`blog.json` 和 `resume-source.json` 加载成同一个可检索语料。`facts.json` 是主题索引和摘要；`blog.json` 是博客清理拆分后的原文片段；`resume-source.json` 保存 2026 HTML 版及 2024/2021 PDF 版的原文片段、版本、页码和来源。
 
 只把适合访客了解的内容放进语料。不要加入私人联系方式、公司机密或未经审核的内部笔记。检索只会返回 `visibility: "public"` 的记录。标记为 `sensitivity: "personal"` 的博客片段，只有当前问题明确匹配其标题或关键词时才会召回。
 
@@ -29,13 +29,13 @@ API 会把 `facts.json`、`blog.json` 和 `resume-source.json` 加载成同一�
 
 ## 更新简历原文
 
-本地需要 Poppler 的 `pdftotext`。将更新后的简历 PDF 放到 `ref` 对应路径后运行：
+生成器从 `ref/AI产品负责人_设计版简历_v6-打印修复.html` 按可见 DOM 区块抽取 2026 版内容；将来更新 HTML 时，替换该文件后重跑生成器。2024/2021 历史版仍从 PDF 抽取，本地需要 Poppler 的 `pdftotext`。更新后运行：
 
 ```sh
 node tools/content/build-agent-resume-corpus.mjs
 ```
 
-若 `pdftotext` 不在 `PATH`，通过 `PDFTOTEXT_BIN` 指定它的完整路径。生成器保留简历正文措辞和页码，仅规范 PDF 文本层中的汉字兼容字形、拆分长段落并移除电话、邮箱、QQ/WeChat 账号及链接。简历原文进入回答前会校验引文是否逐字存在于检索片段；若校验失败，API 会改为返回该片段原文。为完成校验，简历来源回答会在检查通过后再开始输出。运行服务时只需要生成后的 `resume-source.json`，不依赖 Poppler。原始简历、Prompt 和博客源文件保存在本地，不需要提交；更新源文件后提交生成的语料 JSON 即可。
+若 `pdftotext` 不在 `PATH`，通过 `PDFTOTEXT_BIN` 指定它的完整路径。生成器保留各来源的正文措辞和页码，仅规范历史 PDF 文本层中的汉字兼容字形、拆分长段落并移除电话、邮箱、QQ/WeChat 账号及链接。HTML 抽取忽略 CSS、注释、打印按钮和链接属性，只读可见的简历区块。简历原文进入回答前会校验引文是否逐字存在于检索片段；若校验失败，API 会改为返回该片段原文。为完成校验，简历来源回答会在检查通过后再开始输出。运行服务时只需要生成后的 `resume-source.json`，不依赖 Poppler。原始简历、HTML、Prompt 和博客源文件保存在本地，不需要提交；更新源文件后提交生成的语料 JSON 即可。
 
 ## 添加或更新博客
 
