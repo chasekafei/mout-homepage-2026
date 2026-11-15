@@ -162,7 +162,7 @@ export async function streamChat(request: ChatRequest, onEvent: (event: AgentEve
   const lastUserIndex = request.messages.map((message) => message.role).lastIndexOf("user");
   const message = lastUserIndex >= 0 ? request.messages[lastUserIndex].content : "";
   const history = selectHistoryWithinBudget(
-    request.messages.slice(0, lastUserIndex >= 0 ? lastUserIndex : request.messages.length),
+    request.messages.slice(0, lastUserIndex >= 0 ? lastUserIndex : request.messages.length).map(({ role, content }) => ({ role, content })),
     116_000,
   );
   const response = await fetch(`${API_URL}/v1/chat`, {

@@ -69,3 +69,15 @@ test("history selection keeps newest complete turns within the estimate budget",
   const budget = lastTurn.reduce((total, message) => total + estimateTextTokens(message.content) + 8, 0);
   assert.deepEqual(selectHistoryWithinBudget(history, budget).map((message) => message.content), ["问题 4", "回答 4"]);
 });
+
+test("history selection preserves client metadata while trimming token content", () => {
+  const history = [
+    { id: "u1", role: "user" as const, content: "项目是什么？" },
+    { id: "a1", role: "assistant" as const, content: "它是一个 AI 产品。", sources: [{ id: "fact-1", title: "项目事实" }], contactPrompt: true },
+  ];
+  const budget = history.reduce((total, message) => total + estimateTextTokens(message.content) + 8, 0);
+  const selected = selectHistoryWithinBudget(history, budget);
+  assert.equal(selected[1].id, "a1");
+  assert.deepEqual(selected[1].sources, [{ id: "fact-1", title: "项目事实" }]);
+  assert.equal(selected[1].contactPrompt, true);
+});

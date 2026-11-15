@@ -113,26 +113,26 @@ export function estimateMessageTokens(message: ChatMessage): number {
 }
 
 /** Selects the newest complete user/assistant turns that fit the estimated input budget. */
-export function selectHistoryWithinBudget(
-  history: ChatMessage[] | undefined,
+export function selectHistoryWithinBudget<T extends ChatMessage>(
+  history: T[] | undefined,
   tokenBudget: number,
   maxMessages = 256,
   maxMessageChars = 32_000,
-): ChatMessage[] {
+): T[] {
   if (!history || tokenBudget <= 0) return [];
   const normalized = history
-    .filter((message): message is ChatMessage => Boolean(message)
+    .filter((message): message is T => Boolean(message)
       && (message.role === "user" || message.role === "assistant")
       && typeof message.content === "string")
-    .map((message) => ({ role: message.role, content: message.content.trim().slice(0, maxMessageChars) }))
+    .map((message) => ({ ...message, content: message.content.trim().slice(0, maxMessageChars) }))
     .filter((message) => message.content.length > 0)
     .slice(-maxMessages);
 
-  const turns: ChatMessage[][] = [];
-  const addCompleteTurn = (turn: ChatMessage[] | undefined) => {
+  const turns: T[][] = [];
+  const addCompleteTurn = (turn: T[] | undefined) => {
     if (turn?.some((message) => message.role === "assistant")) turns.push(turn);
   };
-  let current: ChatMessage[] | undefined;
+  let current: T[] | undefined;
   for (const message of normalized) {
     if (message.role === "user") {
       addCompleteTurn(current);
@@ -143,7 +143,7 @@ export function selectHistoryWithinBudget(
   }
   addCompleteTurn(current);
 
-  const selected: ChatMessage[][] = [];
+  const selected: T[][] = [];
   let used = 0;
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const turn = turns[index];

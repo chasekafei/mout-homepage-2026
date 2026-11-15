@@ -187,7 +187,14 @@ export function App() {
   const [mode, setMode] = useState<AgentMode>(() => activeConversation?.mode ?? "profile");
   const [isStreaming, setIsStreaming] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [sources, setSources] = useState<AgentSource[]>([]);
+  const conversationSources = useMemo(() => {
+    const byId = new Map<string, AgentSource>();
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+      for (const source of message.sources ?? []) byId.set(source.id, source);
+    }
+    return [...byId.values()];
+  }, [messages]);
   const [archiveWarning, setArchiveWarning] = useState("");
   const [error, setError] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -275,7 +282,6 @@ export function App() {
     const conversation = newConversation();
     setConversationState((state) => ({ activeId: conversation.id, conversations: [conversation, ...state.conversations].slice(0, MAX_CONVERSATIONS) }));
     setMode("profile");
-    setSources([]);
     setError("");
     setSearching(false);
     setShowContext(false);
@@ -292,7 +298,6 @@ export function App() {
     if (!conversation) return;
     setConversationState((state) => ({ ...state, activeId: id }));
     setMode(conversation.mode);
-    setSources([]);
     setError("");
     setSearching(false);
     setShowContext(false);
@@ -308,7 +313,6 @@ export function App() {
     const assistant: ChatMessage = { id: makeId("assistant"), role: "assistant", content: "", createdAt: Date.now(), pending: true };
     const next = [...messages, user, assistant];
     setMessages(next);
-    setSources([]);
     setArchiveWarning("");
     setShowContext(false);
     setSearching(false);
@@ -319,7 +323,6 @@ export function App() {
       await streamChat({ conversationId: conversationState.activeId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im" }, (event: AgentEvent) => {
         if (event.type === "meta") setSearching(Boolean(event.searching));
         if (event.type === "source") {
-          setSources((current) => current.some((item) => item.id === event.source.id) ? current : [...current, event.source]);
           setMessages((current) => current.map((message) => message.id === assistant.id
             ? { ...message, sources: [...(message.sources ?? []).filter((source) => source.id !== event.source.id), event.source] }
             : message));
@@ -327,8 +330,9 @@ export function App() {
         }
         if (event.type === "fact_sources") {
           const factSources = event.sources.filter((source) => source.kind === "profile" || source.kind === "project");
-          setSources((current) => [...current.filter((source) => source.kind === "web"), ...factSources]);
-          setMessages((current) => current.map((message) => message.id === assistant.id ? { ...message, sources: factSources } : message));
+          setMessages((current) => current.map((message) => message.id === assistant.id
+            ? { ...message, sources: [...(message.sources ?? []).filter((source) => source.kind === "web"), ...factSources] }
+            : message));
           if (factSources.length) setShowContext(true);
         }
         if (event.type === "contact_prompt") {
@@ -363,14 +367,14 @@ export function App() {
       event.preventDefault(); void send();
     }
   };
-  const clear = () => { if (isStreaming) return; setMessages([]); setSources([]); setShowContext(false); setError(""); inputRef.current?.focus(); };
+  const clear = () => { if (isStreaming) return; setMessages([]); setShowContext(false); setError(""); inputRef.current?.focus(); };
 
   return (
     <div className="im-app">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="im-topbar">
-        <a className="back-home" href={cameFromHomepage ? "https://mout.me/" : "https://mout.me/"}><Icon name="back" size={17} /><span>回到 MouT.me</span></a>
+        <a className="back-home" href={cameFromHomepage ? "https://mout.me/" : "https://mout.me/"}><Icon name="back" size={17} /><span>回到个人主页</span></a>
         <div className="top-brand"><span className="top-brand-dot" /><span>MouT<em>.me</em></span><small>/ AI clone</small></div>
         <div className="top-actions">
           <span className="connection-state"><i />{isMockMode ? "预览模式" : "在线"}</span>
@@ -412,7 +416,7 @@ export function App() {
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
                       {message.role === "assistant" && message.pending && message.content && <span className="stream-caret" />}
                       {message.role === "assistant" && !!message.sources?.length && <div className="message-sources">
-                        <button className="inline-sources" type="button" onClick={() => { setSources(message.sources ?? []); setShowContext(true); }}><Icon name="book" size={14} />本轮检索资料 {message.sources.length}</button>
+                        <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />本轮检索资料 {message.sources.length}</button>
                         <div className="project-source-list">{message.sources.filter((source) => source.kind === "project" && source.project).map((source) => <ProjectSource key={source.id} source={source} />)}</div>
                       </div>}
                       {message.role === "assistant" && message.contactPrompt && <div className="contact-prompt"><span>想继续聊工作或合作？</span><a href="mailto:hello@mout.me?subject=%E6%9D%A5%E8%87%AA%20MouT.me%20AI%20%E5%88%86%E8%BA%AB">联系 MouT<Icon name="external" size={14} /></a></div>}
@@ -436,8 +440,8 @@ export function App() {
         </main>
 
         <aside className={`context-rail ${showContext ? "is-open" : ""}`} aria-label="回答来源">
-          <div className="context-header"><div><span className="eyebrow">CONTEXT</span><h2>本轮检索资料</h2></div><button type="button" onClick={() => setShowContext(false)} aria-label="关闭来源面板"><Icon name="close" size={18} /></button></div>
-          {searching ? <div className="context-searching"><span className="search-ring" /><strong>正在查找最新信息</strong><p>只在问题需要时连接公开网络。</p></div> : sources.length > 0 ? <><p className="context-lede">这些是本轮检索到并注入上下文的个人资料与外部来源，不代表模型一定逐条引用。</p><div className="source-list">{sources.map((source) => <SourceRow key={source.id} source={source} />)}</div></> : <div className="context-empty"><Icon name="book" size={22} /><p>本轮检索到的资料会显示在这里。</p></div>}
+          <div className="context-header"><div><span className="eyebrow">CONTEXT</span><h2>当前对话资料</h2></div><button type="button" onClick={() => setShowContext(false)} aria-label="关闭来源面板"><Icon name="close" size={18} /></button></div>
+          {searching ? <div className="context-searching"><span className="search-ring" /><strong>正在查找最新信息</strong><p>只在问题需要时连接公开网络。</p></div> : conversationSources.length > 0 ? <><p className="context-lede">按对话轮次汇总已检索并注入上下文的个人资料与外部来源；不代表模型一定逐条引用。</p><div className="source-list">{conversationSources.map((source) => <SourceRow key={source.id} source={source} />)}</div></> : <div className="context-empty"><Icon name="book" size={22} /><p>本对话的检索资料会显示在这里。</p></div>}
           <div className="context-bottom"><span className="context-signal" /><span>{mode === "profile" ? "个人资料已启用" : "实时搜索已启用"}</span></div>
         </aside>
       </div>
