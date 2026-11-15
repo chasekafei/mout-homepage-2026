@@ -51,11 +51,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 
 .im-layout { position: relative; z-index: 1; width: min(1440px, 100%); min-height: calc(100dvh - 125px); margin: 0 auto; padding: 40px 32px 60px; display: grid; grid-template-columns: 226px minmax(0, 670px) 230px; gap: clamp(38px, 6vw, 108px); justify-content: center; }
 .identity-rail { align-self: start; padding-top: 20px; }
-.portrait-frame { position: relative; width: 132px; height: 164px; margin-bottom: 24px; border: 1px solid rgba(239,233,220,.18); background: #252928; overflow: hidden; }
-.portrait-frame::after { content: ""; position: absolute; inset: 0; background: linear-gradient(145deg, transparent 48%, rgba(110,224,198,.14)); pointer-events: none; }
-.portrait-frame > img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.25) contrast(1.06); opacity: .78; }
-.portrait-pixel { position: absolute; right: -13px; bottom: -13px; display: grid; place-items: center; width: 62px; height: 62px; border: 4px solid var(--night); background: var(--sun); }
-.portrait-pixel img { width: 52px; height: 52px; }
+.portrait-frame { position: relative; width: 132px; height: 132px; margin-bottom: 24px; border: 1px solid rgba(239,233,220,.18); background: var(--sun); overflow: hidden; }
+.portrait-avatar { position: absolute; width: 242%; height: 242%; max-width: none; left: -71%; top: -46%; image-rendering: pixelated; }
 .eyebrow { color: var(--mint); font: 10px/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; }
 .identity-copy h1 { margin: 9px 0 7px; color: var(--paper); font-size: 21px; font-weight: 600; letter-spacing: -.045em; line-height: 1.25; }
 .identity-copy p { max-width: 190px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
@@ -76,11 +73,10 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 .welcome-orbit { position: relative; width: 96px; height: 96px; margin: 0 auto 25px; display: grid; place-items: center; }
 .orbit-line { position: absolute; inset: 9px; border: 1px solid rgba(110,224,198,.22); border-radius: 50%; transform: rotate(-22deg) scaleX(1.45); }
 .orbit-line-b { inset: 16px -2px; border-color: rgba(231,123,91,.2); transform: rotate(34deg) scaleX(1.24); }
-.assistant-mark { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 60px; height: 60px; border: 1px solid rgba(110,224,198,.45); background: #27302e; box-shadow: 0 0 0 6px rgba(110,224,198,.06), 0 0 34px rgba(110,224,198,.17); }
-.assistant-mark img { width: 54px; height: 54px; }
+.assistant-mark { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 60px; height: 60px; border: 1px solid rgba(110,224,198,.45); background: var(--sun); box-shadow: 0 0 0 6px rgba(110,224,198,.06), 0 0 34px rgba(110,224,198,.17); overflow: hidden; }
+.assistant-mark .assistant-avatar-crop { position: absolute; width: 296%; height: 296%; max-width: none; left: -98%; top: -67%; image-rendering: pixelated; }
 .assistant-mark i { position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px; border: 2px solid var(--night); border-radius: 50%; background: var(--mint); }
-.assistant-mark-small { flex: none; width: 32px; height: 32px; border-width: 1px; box-shadow: none; background: #27302e; }
-.assistant-mark-small img { width: 28px; height: 28px; }
+.assistant-mark-small { flex: none; width: 32px; height: 32px; border-width: 1px; box-shadow: none; background: var(--sun); }
 .assistant-mark-small i { display: none; }
 .welcome-kicker { margin: 0 0 14px; color: var(--mint); font: 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 .welcome-view h2 { margin: 0; color: var(--paper); font-size: clamp(30px, 4vw, 48px); font-weight: 500; letter-spacing: -.065em; line-height: 1.25; }
@@ -231,9 +227,6 @@ kbd { border: 1px solid rgba(239,233,220,.16); padding: 1px 4px; color: #9da19d;
   .im-layout { display: block; min-height: calc(100dvh - 62px); padding: 0 17px 24px; }
   .identity-rail { display: flex; align-items: center; gap: 11px; padding: 17px 0 15px; border-bottom: 1px solid var(--line); }
   .portrait-frame { width: 39px; height: 39px; margin: 0; border: 0; }
-  .portrait-frame > img { display: none; }
-  .portrait-pixel { position: static; width: 39px; height: 39px; border: 0; }
-  .portrait-pixel img { width: 39px; height: 39px; }
   .identity-copy { flex: 1; }
   .identity-copy .eyebrow { display: none; }
   .identity-copy h1 { margin: 0 0 1px; font-size: 15px; }
