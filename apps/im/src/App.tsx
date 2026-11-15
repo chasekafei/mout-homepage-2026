@@ -153,7 +153,7 @@ function SourceRow({ source }: { source: AgentSource }) {
 }
 
 function AssistantMark({ small = false }: { small?: boolean }) {
-  return <span className={`assistant-mark ${small ? "assistant-mark-small" : ""}`}><img src="/avatar-pixel.png" alt="" className="assistant-avatar-crop pixel" />{!small && <i />}</span>;
+  return <span className={`assistant-mark ${small ? "assistant-mark-small" : ""}`}><img src="/avatar-pixel.png" alt="" className="pixel" />{!small && <i />}</span>;
 }
 
 function safeLocalPath(value: string | undefined): string | null {
@@ -367,7 +367,7 @@ export function App() {
 
       <div className="im-layout">
         <aside className="identity-rail" aria-label="分身介绍">
-          <div className="portrait-frame"><img src="/avatar-pixel.png" alt="MouT 的像素头像" className="portrait-avatar pixel" /></div>
+          <div className="portrait-frame"><img src="/avatar-pixel.png" alt="MouT 的完整像素头像" className="pixel" /></div>
           <div className="identity-copy"><span className="eyebrow">PERSONAL CLONE 01</span><h1>和我的分身聊聊</h1><p>不在的时候，你可以先从这里了解我。</p></div>
           <div className="identity-note"><span className="quote-mark">“</span><p>表面情绪稳定，脑子里一直在施工。</p><span className="quote-author">— MouT</span></div>
           <div className="identity-meta"><div><span>身份</span><strong>AI 产品经理</strong></div><div><span>在这里聊</span><strong>经历 · 产品 · 想法</strong></div></div>
