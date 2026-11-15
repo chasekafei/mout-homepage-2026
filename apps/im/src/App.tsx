@@ -194,6 +194,7 @@ export function App() {
   const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
+  const followPageBottom = useRef(true);
 
   useEffect(() => { void warmAgentBackend(); }, []);
 
@@ -241,9 +242,23 @@ export function App() {
   }, [activeConversation?.id]);
 
   useEffect(() => {
-    const node = conversationRef.current;
-    if (!node || messages.length === 0) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    const updateFollow = () => {
+      const root = document.documentElement;
+      followPageBottom.current = root.scrollHeight - (window.scrollY + window.innerHeight) < 180;
+    };
+    updateFollow();
+    window.addEventListener("scroll", updateFollow, { passive: true });
+    window.addEventListener("resize", updateFollow, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateFollow);
+      window.removeEventListener("resize", updateFollow);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!followPageBottom.current || messages.length === 0) return;
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" }));
+    return () => cancelAnimationFrame(frame);
   }, [messages, searching]);
 
   const changeMode = (nextMode: AgentMode) => {
@@ -374,7 +389,7 @@ export function App() {
           <a className="studio-link" href="https://mout.me/work" target="_blank" rel="noreferrer"><span>进入我的工作场景</span><Icon name="external" size={15} /></a>
         </aside>
 
-        <main className="chat-column">
+        <main className={`chat-column ${messages.length ? "has-messages" : "is-welcome"}`}>
           <div className="conversation" ref={conversationRef} aria-live="polite">
             {messages.length === 0 ? (
               <section className="welcome-view">
