@@ -43,3 +43,8 @@ venv/
 .cache/
 .eslintcache
 coverage/
+
+# Local source material used to build the deployable Agent corpus
+/ref/Blog/
+/ref/我的求职分身-Prompt.md
+/ref/闫宇琨-AI 产品负责人-2026.09.09.pdf

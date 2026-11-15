@@ -26,6 +26,6 @@ export const config = {
   contextOutputReserveTokens: Number(process.env.CONTEXT_OUTPUT_RESERVE_TOKENS || 8_192),
   contextSafetyMarginTokens: Number(process.env.CONTEXT_SAFETY_MARGIN_TOKENS || 2_048),
   maxHistoryMessages: 256,
-  maxContextFacts: Number(process.env.MAX_CONTEXT_FACTS || 5),
+  maxContextFacts: Number(process.env.MAX_CONTEXT_FACTS || 8),
   upstreamTimeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS || 60_000),
 };

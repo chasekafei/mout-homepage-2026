@@ -2,7 +2,11 @@ import type { ChatMessage, PersonalFact } from "./types.js";
 
 const normalize = (value: string) => value.toLocaleLowerCase("zh-CN").replace(/\s+/g, " ");
 const compact = (value: string) => normalize(value).replace(/[^\p{L}\p{N}]+/gu, "");
-const STOP_BIGRAMS = new Set(["你是", "我是", "什么", "怎么", "如何", "可以", "这个", "那个", "一下", "吗", "呢"]);
+const STOP_BIGRAMS = new Set([
+  "你是", "我是", "什么", "怎么", "如何", "可以", "这个", "那个", "一下", "吗", "呢",
+  "是什", "做什", "么产", "你平", "平时", "时做", "当时", "为什", "什么", "做过",
+]);
+const STOP_TRIGRAMS = new Set(["是什么", "什么产品", "什么项目", "什么应用", "做什么", "为什么", "你平时", "平时做", "时做什", "当时为", "时为什"]);
 
 function terms(value: string): Set<string> {
   const result = new Set<string>();
@@ -18,7 +22,10 @@ function terms(value: string): Set<string> {
       const bigram = chars[i] + chars[i + 1];
       if (!STOP_BIGRAMS.has(bigram)) result.add(bigram);
     }
-    for (let i = 0; i < chars.length - 2; i += 1) result.add(chars.slice(i, i + 3).join(""));
+    for (let i = 0; i < chars.length - 2; i += 1) {
+      const trigram = chars.slice(i, i + 3).join("");
+      if (!STOP_TRIGRAMS.has(trigram)) result.add(trigram);
+    }
   }
   return result;
 }
@@ -27,7 +34,9 @@ export type RankedFact = { fact: PersonalFact; score: number };
 
 /** Lexical retrieval with Chinese n-grams, curated aliases, field weighting, and term rarity. */
 export function rankFacts(query: string | string[], facts: PersonalFact[]): RankedFact[] {
-  const queries = (Array.isArray(query) ? query : [query]).map((text) => ({ text: normalize(text), terms: terms(text) })).filter((item) => item.terms.size > 0);
+  const queries = (Array.isArray(query) ? query : [query])
+    .map((text) => ({ text: normalize(text), compactText: compact(text), terms: terms(text) }))
+    .filter((item) => item.terms.size > 0 || item.compactText.length >= 4);
   if (!queries.length) return [];
   const publicFacts = facts.filter((fact) => fact.visibility === "public");
   const termFrequency = new Map<string, number>();
@@ -60,20 +69,24 @@ export function rankFacts(query: string | string[], facts: PersonalFact[]): Rank
             (titleTerms.has(term) ? 7 : 0)
             + (keywordTerms.has(term) ? 6 : 0)
             + (tagTerms.has(term) ? 4 : 0)
-            + (bodyTerms.has(term) ? 1 : 0)
+            + (bodyTerms.has(term) ? (fact.recordType === "resume_source" ? 2 : 1) : 0)
           );
         }
-        const normalizedQuery = compact(query.text);
         for (const phrase of fact.queries ?? []) {
           const normalizedPhrase = compact(phrase);
-          if (normalizedPhrase.length >= 4 && (normalizedQuery.includes(normalizedPhrase) || normalizedPhrase.includes(normalizedQuery))) {
-            score += recencyWeight * 10;
+          if (normalizedPhrase.length < 4 || query.compactText.length < 4) continue;
+          if (query.compactText === normalizedPhrase) score += recencyWeight * 80;
+          else if ((query.compactText.includes(normalizedPhrase) || normalizedPhrase.includes(query.compactText))
+            && Math.min(query.compactText.length, normalizedPhrase.length) / Math.max(query.compactText.length, normalizedPhrase.length) >= 0.72) {
+            score += recencyWeight * 14;
           }
         }
       }
       return { fact, score };
     })
-    .sort((a, b) => b.score - a.score || a.fact.id.localeCompare(b.fact.id))
+    .sort((a, b) => b.score - a.score
+      || (b.fact.sourceVersion ?? "").localeCompare(a.fact.sourceVersion ?? "")
+      || a.fact.id.localeCompare(b.fact.id))
 }
 
 /** Avoids filling the prompt with weak matches when only a few facts are relevant. */
@@ -81,14 +94,94 @@ export function retrieveFacts(query: string | string[], facts: PersonalFact[], l
   const ranked = rankFacts(query, facts);
   const best = ranked[0]?.score ?? 0;
   if (best < 1.5) return [];
-  return ranked
-    .filter(({ score }) => score >= Math.max(1.5, best * 0.68))
-    .slice(0, limit)
-    .map(({ fact }) => fact);
+  const selected: PersonalFact[] = [];
+  const blogGroupCounts = new Map<string, number>();
+  const resumePageCounts = new Map<string, number>();
+  let resumeSourceCount = 0;
+  const queryTerms = (Array.isArray(query) ? query : [query]).map((text) => terms(text));
+  const addCandidate = (fact: PersonalFact): boolean => {
+    if (selected.some((item) => item.id === fact.id)) return false;
+    if (fact.sensitivity === "personal") {
+      const explicitTerms = new Set([...terms(fact.title), ...terms(fact.keywords?.join(" ") ?? "")]);
+      const explicitlyRequested = queryTerms[0]?.size
+        && [...explicitTerms].some((term) => term.length > 1 && queryTerms[0].has(term));
+      if (!explicitlyRequested) return false;
+    }
+    if (fact.recordType === "blog") {
+      const groupId = fact.groupId ?? fact.id;
+      const count = blogGroupCounts.get(groupId) ?? 0;
+      if (count >= 2) return false;
+      blogGroupCounts.set(groupId, count + 1);
+    }
+    if (fact.recordType === "resume_source") {
+      if (resumeSourceCount >= 3) return false;
+      const groupId = fact.groupId ?? fact.id;
+      const count = resumePageCounts.get(groupId) ?? 0;
+      if (count >= 2) return false;
+      resumePageCounts.set(groupId, count + 1);
+      resumeSourceCount += 1;
+    }
+    selected.push(fact);
+    return true;
+  };
+
+  const resumeSourceScores = new Map<string, { fact: PersonalFact; score: number }>();
+  for (const { fact, score } of ranked) {
+    if (fact.recordType !== "resume_source") continue;
+    resumeSourceScores.set(fact.id, { fact, score });
+  }
+
+  const normalThreshold = Math.max(1.5, best * 0.68);
+  const resumeBackedSummaries = ranked
+    .filter(({ fact, score }) => score >= normalThreshold
+      && fact.recordType !== "resume_source"
+      && /\.pdf(?:#|$)/iu.test(fact.source))
+    .slice(0, 8)
+    .flatMap(({ fact }) => [fact.title, ...(fact.keywords ?? []), ...(fact.queries ?? [])])
+    .slice(0, 40);
+  if (resumeBackedSummaries.length) {
+    for (const { fact, score } of rankFacts(resumeBackedSummaries, facts)) {
+      if (fact.recordType !== "resume_source") continue;
+      const current = resumeSourceScores.get(fact.id);
+      if (!current || score > current.score) resumeSourceScores.set(fact.id, { fact, score });
+    }
+  }
+
+  const sourceCandidates = [...resumeSourceScores.values()].sort((a, b) => b.score - a.score
+    || (b.fact.sourceVersion ?? "").localeCompare(a.fact.sourceVersion ?? "")
+    || a.fact.id.localeCompare(b.fact.id));
+  const bestResumeSourceScore = sourceCandidates[0]?.score ?? 0;
+  const resumeSourceThreshold = Math.max(5, bestResumeSourceScore * 0.48);
+  for (const { fact, score } of sourceCandidates) {
+    if (score < resumeSourceThreshold) break;
+    addCandidate(fact);
+    if (resumeSourceCount >= Math.min(limit, 3)) break;
+  }
+
+  for (const { fact, score } of ranked) {
+    if (score < normalThreshold) break;
+    addCandidate(fact);
+    if (selected.length >= limit) break;
+  }
+  return selected;
 }
 
 export function factContext(facts: PersonalFact[]): string[] {
-  return facts.map((fact) => `${fact.title}：${fact.body}（来源：${fact.source}）`);
+  return facts.map((fact) => {
+    if (fact.recordType === "resume_source") {
+      return `简历原文摘录（${fact.sourceVersion} 版，PDF 第 ${fact.page} 页；涉及简历经历时必须保留原句措辞）：\n${fact.body}\n来源：${fact.source}`;
+    }
+    if (fact.recordType === "blog") {
+      const date = fact.publishedAt
+        ? `，${fact.dateConfidence === "uncertain" ? "目录推定年份" : "写于"} ${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "（具体日期不确定）" : ""}`
+        : "，发布日期未确认";
+      return `历史博客片段${date}，仅代表当时的记录或观点：${fact.title}：${fact.body}（来源：${fact.source}）`;
+    }
+    const label = fact.recordType === "opinion"
+      ? "公开观点索引摘要（非逐字引文）"
+      : "个人资料索引摘要（非简历原文，不可作为简历措辞引用）";
+    return `${label}：${fact.title}：${fact.body}（来源：${fact.source}）`;
+  });
 }
 
 const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef]/u;

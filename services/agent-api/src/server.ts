@@ -14,6 +14,9 @@ import {
   type FactSource,
   type AgentRequest,
   type ChatMessage,
+  type ProviderEvent,
+  fallbackResumeQuote,
+  hasVerbatimResumeQuote,
 } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
 import { providerModel, sseEvent, streamProvider } from "./provider.js";
@@ -33,8 +36,16 @@ let facts: Awaited<ReturnType<typeof loadFacts>> = [];
 const hits = new Map<string, { count: number; resetAt: number }>();
 
 async function loadFacts() {
-  const raw = await readFile(resolve(root, "content/agent-public/facts.json"), "utf8");
-  return JSON.parse(raw) as import("@mout/agent-core").PersonalFact[];
+  const [factsRaw, blogsRaw, resumesRaw] = await Promise.all([
+    readFile(resolve(root, "content/agent-public/facts.json"), "utf8"),
+    readFile(resolve(root, "content/agent-public/blog.json"), "utf8"),
+    readFile(resolve(root, "content/agent-public/resume-source.json"), "utf8"),
+  ]);
+  return [
+    ...(JSON.parse(factsRaw) as import("@mout/agent-core").PersonalFact[]),
+    ...(JSON.parse(blogsRaw) as import("@mout/agent-core").PersonalFact[]),
+    ...(JSON.parse(resumesRaw) as import("@mout/agent-core").PersonalFact[]),
+  ];
 }
 
 function originAllowed(origin: string | undefined): boolean {
@@ -166,12 +177,20 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
       : undefined;
     return {
       id: fact.id,
-      title: fact.title,
-      source: fact.source,
+      title: fact.recordType === "resume_source"
+        ? `简历原文 · ${fact.sourceVersion} · PDF 第 ${fact.page} 页`
+        : fact.recordType === "blog" ? `博客：${fact.title}` : fact.title,
+      source: fact.recordType === "resume_source"
+        ? `${fact.source}（PDF 第 ${fact.page} 页）`
+        : fact.recordType === "blog"
+          ? `历史博客${fact.publishedAt ? ` · ${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "（日期不确定）" : ""}` : " · 日期未确认"} · ${fact.source}`
+          : fact.source,
       kind: projectPresentation ? "project" : "profile",
       ...(projectPresentation ? { project: projectPresentation } : {}),
     };
   });
+  const resumeSources = selectedFacts.filter((fact) => fact.recordType === "resume_source");
+  const validateResumeQuote = resumeSources.length > 0;
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...history,
@@ -212,11 +231,17 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   let answer = "";
   let citations: Array<{ title: string; url: string }> = [];
   let answerStatus: "complete" | "error" = "complete";
+  let deferredDone: Extract<ProviderEvent, { type: "done" }> | undefined;
   try {
     for await (const event of streamProvider(provider, { messages, model, stream: true, useWebSearch: search })) {
       if (event.type === "delta") answer += event.text;
       if (event.type === "citation") citations = [...citations, { title: event.title, url: event.url }];
       if (event.type === "error") answerStatus = "error";
+      if (validateResumeQuote && event.type === "delta") continue;
+      if (validateResumeQuote && event.type === "done") {
+        deferredDone = event;
+        continue;
+      }
       if (!res.destroyed && !res.writableEnded) res.write(sseEvent(event));
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
@@ -226,6 +251,17 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "error", message }));
   }
   if (!answer.trim()) answerStatus = "error";
+  if (validateResumeQuote && answerStatus === "complete") {
+    if (!hasVerbatimResumeQuote(answer, resumeSources)) answer = fallbackResumeQuote(resumeSources[0]);
+    const answerChars = Array.from(answer);
+    for (let offset = 0; offset < answerChars.length; offset += 80) {
+      if (!res.destroyed && !res.writableEnded) {
+        res.write(sseEvent({ type: "delta", text: answerChars.slice(offset, offset + 80).join("") }));
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    if (!res.destroyed && !res.writableEnded) res.write(sseEvent(deferredDone || { type: "done" }));
+  }
 
   const archiveTurn = await archiveTurnPromise;
   if (archiveTurn) {

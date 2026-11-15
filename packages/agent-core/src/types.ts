@@ -11,6 +11,13 @@ export type PersonalFact = {
   id: string;
   title: string;
   body: string;
+  recordType?: "fact" | "opinion" | "blog" | "resume_source";
+  publishedAt?: string;
+  dateConfidence?: "uncertain";
+  groupId?: string;
+  sensitivity?: "personal";
+  sourceVersion?: "2021" | "2024" | "2026";
+  page?: number;
   tags: string[];
   keywords?: string[];
   queries?: string[];
