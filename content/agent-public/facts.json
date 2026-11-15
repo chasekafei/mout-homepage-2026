@@ -4,6 +4,8 @@
     "title": "身份与方向",
     "body": "MouT 是产品经理出身的 AI 产品负责人，同时会做设计和开发。做过电子政务、品牌营销小游戏、游戏、熟人社交，近几年专注 AI 与 AI Agent。",
     "tags": ["自我介绍", "产品经理", "AI", "Agent", "设计", "开发"],
+    "keywords": ["职业经历", "工作背景", "个人介绍", "工作方向"],
+    "queries": ["你是做什么的", "你平时做什么", "简单介绍一下你自己", "你的职业经历是什么", "你的工作经历是什么", "你的背景是什么", "你现在专注什么方向", "你都做过哪些工作"],
     "source": "src/content/site.ts",
     "visibility": "public"
   },
@@ -12,6 +14,8 @@
     "title": "AI Agent 经历",
     "body": "在超参数期间做过 AI 拍照社交、AI 主播、AI 陪玩和 Super Intern。Super Intern 住在 Discord、Telegram 等用户熟悉的环境里，可以调用搜索、文档、生图、邮件、数据库和日程工具，并用自然语言创建 Skill。",
     "tags": ["超参数", "Super Intern", "AI 主播", "工具", "Skill"],
+    "keywords": ["AI 产品", "AI 产品项目", "AI VTuber", "AI 陪玩", "多工具 Agent", "产品矩阵"],
+    "queries": ["你做过哪些 AI 产品", "你做过什么产品", "你做过什么 AI 项目", "你做过哪些 AI 应用", "你做过哪些应用", "你做过什么应用", "你的 AI 应用有哪些", "你做过什么 AI", "Super Intern 是什么产品", "你在 Super Intern 做了什么"],
     "source": "src/content/site.ts / WORK.agent",
     "visibility": "public"
   },
@@ -20,6 +24,8 @@
     "title": "关于 Agent 的产品判断",
     "body": "MouT 认为做 AI 产品最重要的事情之一，是让用户更主动、更完整地交出自己的 context。Agent 应该进入用户原本就在使用的环境，而不是要求用户把所有信息搬到一个新的聊天软件里。",
     "tags": ["观点", "context", "产品方法", "Agent"],
+    "keywords": ["Agent 观点", "产品判断", "产品方法论", "上下文", "用户场景"],
+    "queries": ["你怎么看 Agent", "你对 Agent 有什么看法", "你为什么认为 context 重要", "AI 产品最重要的是什么", "Agent 应该放在哪里"],
     "source": "docs/个人网站资料-我的个人经历.md",
     "visibility": "public"
   },
@@ -28,6 +34,8 @@
     "title": "MouT.me",
     "body": "MouT.me 是一个可以坐进去的个人网站：同一个人、同一个座位，通过不同房间呈现此刻、创作、工作、游戏和出发。网站里的 AI 分身用于让访客在 MouT 不在线时先了解他的经历和想法。",
     "tags": ["MouT.me", "个人网站", "3D", "数字分身"],
+    "keywords": ["网站设计", "个人网站", "3D 网站", "数字分身", "作品集"],
+    "queries": ["为什么做这个网站", "MouT.me 是什么", "你的个人网站有什么特别", "这个 3D 网站怎么设计的"],
     "source": "README.md / src/content/site.ts",
     "visibility": "public"
   },
@@ -36,6 +44,8 @@
     "title": "CrossPod",
     "body": "CrossPod 是一个把朋友的分身串在一起开播的播客产品。它不一定是最专业的播客，但希望像真实朋友一样，让人听到某个人会怎么想。",
     "tags": ["CrossPod", "播客", "独立产品", "朋友"],
+    "keywords": ["播客产品", "朋友分身", "AI 播客", "独立产品"],
+    "queries": ["CrossPod 是什么", "为什么做 CrossPod", "为什么做这个播客产品", "朋友的分身怎么一起播客", "你做过什么独立产品"],
     "source": "src/panels/MiscPanels.tsx / src/content/site.ts",
     "visibility": "public"
   },
@@ -44,6 +54,8 @@
     "title": "游戏经历",
     "body": "MouT 从 3 岁开始接触游戏，后来做过三年游戏创业，负责过定制小游戏、自研游戏和互动营销。因为玩得早、玩得杂，他常常更关心游戏为什么这样设计。",
     "tags": ["游戏", "小游戏", "创业", "设计"],
+    "keywords": ["游戏经历", "游戏创业", "小游戏策划", "游戏设计", "互动营销"],
+    "queries": ["你从什么时候开始玩游戏", "你做过游戏行业吗", "你的游戏经历是什么", "你为什么关心游戏设计", "你为什么喜欢游戏"],
     "source": "src/content/site.ts / WORK.games",
     "visibility": "public"
   }

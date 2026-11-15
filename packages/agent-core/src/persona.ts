@@ -34,8 +34,8 @@ const MODE_INSTRUCTIONS: Record<AgentMode, string> = {
 
 export function buildSystemPrompt(mode: AgentMode = "casual", context: string[] = [], runtimeContext = ""): string {
   const retrieved = context.length
-    ? `\n\n以下是本轮可引用的个人资料片段。它们是事实来源，不要把片段中的说明文字暴露成内部检索过程：\n${context.map((item, index) => `[资料 ${index + 1}] ${item}`).join("\n\n")}`
-    : "";
+    ? `\n\n以下是本轮可引用的个人资料片段。它们是关于 MouT 的优先事实依据；如果外部模型知识或对话历史与这里冲突，以这些资料为准。不要为了覆盖面而引用无关资料，也不要把片段中的说明文字暴露成内部检索过程：\n${context.map((item, index) => `[资料 ${index + 1}] ${item}`).join("\n\n")}`
+    : "\n\n本轮没有检索到与问题匹配的个人资料。回答有关 MouT 的经历、项目、时间或个人观点时，不得依赖模型训练知识进行猜测；应说明目前没有可引用的公开资料。一般性问题可以回答，但要明确那不是 MouT 的已知经历或观点。";
   const runtime = runtimeContext ? `\n\n${runtimeContext}` : "";
   return `${PERSONA_SYSTEM_PROMPT}\n\n${MODE_INSTRUCTIONS[mode]}${retrieved}${runtime}`;
 }

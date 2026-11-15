@@ -1,20 +1,88 @@
 import type { ChatMessage, PersonalFact } from "./types.js";
 
 const normalize = (value: string) => value.toLocaleLowerCase("zh-CN").replace(/\s+/g, " ");
+const compact = (value: string) => normalize(value).replace(/[^\p{L}\p{N}]+/gu, "");
+const STOP_BIGRAMS = new Set(["你是", "我是", "什么", "怎么", "如何", "可以", "这个", "那个", "一下", "吗", "呢"]);
 
-/** A deliberately small lexical retriever for the first public corpus. */
-export function retrieveFacts(query: string, facts: PersonalFact[], limit = 5): PersonalFact[] {
-  const normalizedQuery = normalize(query);
-  const terms = normalizedQuery.split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 1);
-  return facts
-    .filter((fact) => fact.visibility === "public")
+function terms(value: string): Set<string> {
+  const result = new Set<string>();
+  const segments = normalize(value).match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef]+|[a-z0-9]+/giu) ?? [];
+  for (const segment of segments) {
+    if (/^[a-z0-9]+$/iu.test(segment)) {
+      if (segment.length > 1) result.add(segment);
+      continue;
+    }
+    const chars = Array.from(segment);
+    for (const char of chars) if (char.length > 1) result.add(char);
+    for (let i = 0; i < chars.length - 1; i += 1) {
+      const bigram = chars[i] + chars[i + 1];
+      if (!STOP_BIGRAMS.has(bigram)) result.add(bigram);
+    }
+    for (let i = 0; i < chars.length - 2; i += 1) result.add(chars.slice(i, i + 3).join(""));
+  }
+  return result;
+}
+
+export type RankedFact = { fact: PersonalFact; score: number };
+
+/** Lexical retrieval with Chinese n-grams, curated aliases, field weighting, and term rarity. */
+export function rankFacts(query: string | string[], facts: PersonalFact[]): RankedFact[] {
+  const queries = (Array.isArray(query) ? query : [query]).map((text) => ({ text: normalize(text), terms: terms(text) })).filter((item) => item.terms.size > 0);
+  if (!queries.length) return [];
+  const publicFacts = facts.filter((fact) => fact.visibility === "public");
+  const termFrequency = new Map<string, number>();
+  for (const fact of publicFacts) {
+    const docTerms = new Set([
+      ...terms(fact.title),
+      ...terms(fact.body),
+      ...terms(fact.tags.join(" ")),
+      ...terms(fact.keywords?.join(" ") ?? ""),
+      ...(fact.queries ?? []).flatMap((phrase) => [...terms(phrase)]),
+    ]);
+    for (const term of docTerms) termFrequency.set(term, (termFrequency.get(term) ?? 0) + 1);
+  }
+
+  return publicFacts
     .map((fact) => {
-      const haystack = normalize(`${fact.title} ${fact.body} ${fact.tags.join(" ")}`);
-      const score = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+      const titleTerms = terms(fact.title);
+      const tagTerms = terms(fact.tags.join(" "));
+      const keywordTerms = terms(fact.keywords?.join(" ") ?? "");
+      const bodyTerms = terms(fact.body);
+      let score = 0;
+      for (let index = 0; index < queries.length; index += 1) {
+        const query = queries[index];
+        const recencyWeight = index === 0 ? 1 : Math.max(0.35, 0.65 / index);
+        for (const term of query.terms) {
+          const df = termFrequency.get(term) ?? 0;
+          if (!df) continue;
+          const idf = Math.log(1 + (publicFacts.length - df + 0.5) / (df + 0.5));
+          score += recencyWeight * idf * (
+            (titleTerms.has(term) ? 7 : 0)
+            + (keywordTerms.has(term) ? 6 : 0)
+            + (tagTerms.has(term) ? 4 : 0)
+            + (bodyTerms.has(term) ? 1 : 0)
+          );
+        }
+        const normalizedQuery = compact(query.text);
+        for (const phrase of fact.queries ?? []) {
+          const normalizedPhrase = compact(phrase);
+          if (normalizedPhrase.length >= 4 && (normalizedQuery.includes(normalizedPhrase) || normalizedPhrase.includes(normalizedQuery))) {
+            score += recencyWeight * 10;
+          }
+        }
+      }
       return { fact, score };
     })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.score - a.score || a.fact.id.localeCompare(b.fact.id))
+}
+
+/** Avoids filling the prompt with weak matches when only a few facts are relevant. */
+export function retrieveFacts(query: string | string[], facts: PersonalFact[], limit = 5): PersonalFact[] {
+  const ranked = rankFacts(query, facts);
+  const best = ranked[0]?.score ?? 0;
+  if (best < 1.5) return [];
+  return ranked
+    .filter(({ score }) => score >= Math.max(1.5, best * 0.68))
     .slice(0, limit)
     .map(({ fact }) => fact);
 }

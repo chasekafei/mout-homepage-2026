@@ -133,7 +133,11 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   const model = providerModel(provider, input.model);
   const conversationId = input.conversationId || randomUUID();
   const search = shouldSearch(input.message);
-  const selectedFacts = retrieveFacts(input.message, facts, config.maxContextFacts);
+  const retrievalQueries = [
+    input.message,
+    ...(input.history ?? []).filter((message) => message.role === "user").slice(-2).map((message) => message.content),
+  ];
+  const selectedFacts = retrieveFacts(retrievalQueries, facts, config.maxContextFacts);
   const runtimeContext = buildRuntimeContext(new Date(), config.timeZone, input.timezone);
   const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext);
   const currentMessageTokens = estimateTextTokens(input.message) + 8;

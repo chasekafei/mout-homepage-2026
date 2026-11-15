@@ -12,6 +12,8 @@ export type PersonalFact = {
   title: string;
   body: string;
   tags: string[];
+  keywords?: string[];
+  queries?: string[];
   source: string;
   visibility: "public" | "private";
 };

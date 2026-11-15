@@ -82,6 +82,9 @@ importers:
 
   packages/agent-core:
     devDependencies:
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
