@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MarkdownContent } from "@mout/chat-ui";
 import { ABOUT, BOOKS, CATS, PRODUCTS, SCENES, type SceneId } from "../content/site";
 
 type Go = (path: string) => void;
@@ -142,7 +143,13 @@ const FAQ = [
   { q: "那两只猫叫什么？", a: "烧酒是狸花猫，小八是英短蓝白。在这个房间里，一个在桌角卷成一团，一个摊在麦克风旁边。" },
 ];
 
-type LiveMessage = { role: "user" | "assistant"; content: string; pending?: boolean };
+type LiveMessage = {
+  role: "user" | "assistant";
+  content: string;
+  pending?: boolean;
+  sources?: Array<{ id: string; title: string; source?: string; detail?: string; kind: "profile" | "project" | "web"; url?: string; project?: { name: string; href: string; eyebrow?: string } }>;
+  contactPrompt?: boolean;
+};
 
 const AGENT_API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
 const IM_URL = (import.meta.env.VITE_IM_URL as string | undefined) || "https://im.mout.me/?source=homepage";
@@ -154,6 +161,8 @@ async function streamHomepageAgent(
   onDelta: (text: string) => void,
   onStatus: (status: "searching" | "answering") => void,
   onArchiveWarning: (message: string) => void,
+  onSources: (sources: NonNullable<LiveMessage["sources"]>) => void,
+  onContactPrompt: () => void,
 ) {
   if (!AGENT_API_URL) {
     const lower = message.toLowerCase();
@@ -196,6 +205,20 @@ async function streamHomepageAgent(
         if (event.type === "status" && (event.value === "searching" || event.value === "answering")) onStatus(event.value);
         if (event.type === "delta" && event.text) onDelta(event.text);
         if (event.type === "archive_warning") onArchiveWarning(event.message || "本轮对话暂时没有归档");
+        if (event.type === "contact_prompt") onContactPrompt();
+        if (event.type === "citation" && typeof (event as { title?: unknown }).title === "string" && typeof (event as { url?: unknown }).url === "string") {
+          const citation = event as { title: string; url: string };
+          onSources([{ id: citation.url, title: citation.title, kind: "web", source: "实时来源", url: citation.url }]);
+        }
+        if (event.type === "fact_sources" && Array.isArray((event as { sources?: unknown }).sources)) {
+          const sources = (event as { sources: unknown[] }).sources.filter((source): source is NonNullable<LiveMessage["sources"]>[number] => (
+            !!source && typeof source === "object"
+            && typeof (source as { id?: unknown }).id === "string"
+            && typeof (source as { title?: unknown }).title === "string"
+            && ["profile", "project"].includes(String((source as { kind?: unknown }).kind))
+          ));
+          onSources(sources);
+        }
         if (event.type === "error") throw new Error(event.message || "分身暂时无法回答");
       } catch (error) {
         if (error instanceof SyntaxError) continue;
@@ -204,6 +227,14 @@ async function streamHomepageAgent(
     }
     if (done) break;
   }
+}
+
+function safeHomePath(value: string | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : null;
+  } catch { return null; }
 }
 
 export function ChatPanel() {
@@ -235,10 +266,16 @@ export function ChatPanel() {
     setBusy(true);
     setStatus("answering");
     try {
-      await streamHomepageAgent(conversationId, content, next.slice(0, -1), (text) => {
+      await streamHomepageAgent(conversationId, content, next.slice(0, -2), (text) => {
         assistant.content += text;
         setMessages([...next.slice(0, -1), { ...assistant }]);
-      }, setStatus, setArchiveWarning);
+      }, setStatus, setArchiveWarning, (sources) => {
+        assistant.sources = [...(assistant.sources ?? []).filter((source) => !sources.some((item) => item.id === source.id)), ...sources];
+        setMessages([...next.slice(0, -1), { ...assistant }]);
+      }, () => {
+        assistant.contactPrompt = true;
+        setMessages([...next.slice(0, -1), { ...assistant }]);
+      });
       assistant.pending = false;
       setMessages([...next.slice(0, -1), { ...assistant }]);
     } catch (reason) {
@@ -256,7 +293,11 @@ export function ChatPanel() {
       <div className="chat-log" aria-live="polite">
         {messages.map((message, index) => (
           <div key={`${message.role}-${index}`} className={`qa qa-${message.role}`}>
-            <p className={`bubble bubble-${message.role === "user" ? "q" : "a"}`}>{message.content}{message.pending && <span className="chat-caret" />}</p>
+            <div className={`bubble bubble-${message.role === "user" ? "q" : "a"}`}>
+              <MarkdownContent content={message.content} className="home-chat-markdown" />{message.pending && <span className="chat-caret" />}
+            </div>
+            {!!message.sources?.length && <div className="home-chat-sources"><span>本轮检索资料</span>{message.sources.map((source) => <div className={`home-chat-source home-chat-source-${source.kind}`} key={source.id}><small>{source.source || source.detail || (source.kind === "web" ? "实时来源" : "公开资料")}</small><strong>{source.title}</strong>{source.kind === "project" && source.project && safeHomePath(source.project.href) && <a href={safeHomePath(source.project.href)!}>{source.project.name} · 查看项目</a>}{source.kind === "web" && source.url && /^https?:\/\//i.test(source.url) && <a href={source.url} target="_blank" rel="noopener noreferrer nofollow">打开来源 ↗</a>}</div>)}</div>}
+            {message.contactPrompt && <div className="home-contact-prompt"><span>想继续聊工作或合作？</span><a href="mailto:hello@mout.me?subject=%E6%9D%A5%E8%87%AA%20MouT.me%20AI%20%E5%88%86%E8%BA%AB">联系 MouT</a></div>}
           </div>
         ))}
         {status === "searching" && <p className="chat-status">正在查找公开来源…</p>}

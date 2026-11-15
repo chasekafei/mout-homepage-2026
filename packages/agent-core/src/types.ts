@@ -14,8 +14,22 @@ export type PersonalFact = {
   tags: string[];
   keywords?: string[];
   queries?: string[];
+  project?: {
+    name: string;
+    href: string;
+    image?: string;
+    eyebrow?: string;
+  };
   source: string;
   visibility: "public" | "private";
+};
+
+export type FactSource = {
+  id: string;
+  title: string;
+  source: string;
+  kind: "profile" | "project";
+  project?: PersonalFact["project"];
 };
 
 export type AgentRequest = {
@@ -38,6 +52,8 @@ export type ProviderRequest = {
 
 export type ProviderEvent =
   | { type: "delta"; text: string }
+  | { type: "fact_sources"; sources: FactSource[] }
+  | { type: "contact_prompt" }
   | { type: "citation"; title: string; url: string }
   | { type: "status"; value: "searching" | "answering" }
   | { type: "archive_warning"; message: string }

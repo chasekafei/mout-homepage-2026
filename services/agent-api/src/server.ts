@@ -11,6 +11,7 @@ import {
   selectHistoryWithinBudget,
   shouldSearch,
   buildRuntimeContext,
+  type FactSource,
   type AgentRequest,
   type ChatMessage,
 } from "@mout/agent-core";
@@ -149,6 +150,28 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
       - currentMessageTokens,
   );
   const history = selectHistoryWithinBudget(input.history, historyBudget, config.maxHistoryMessages);
+  const factSources: FactSource[] = selectedFacts.map((fact) => {
+    const project = fact.project;
+    const projectPresentation = project
+      && typeof project.name === "string"
+      && typeof project.href === "string"
+      && project.href.startsWith("/")
+      && !project.href.startsWith("//")
+      ? {
+        name: project.name.slice(0, 100),
+        href: project.href.slice(0, 240),
+        ...(typeof project.eyebrow === "string" ? { eyebrow: project.eyebrow.slice(0, 80) } : {}),
+        ...(typeof project.image === "string" && project.image.startsWith("/") && !project.image.startsWith("//") ? { image: project.image.slice(0, 240) } : {}),
+      }
+      : undefined;
+    return {
+      id: fact.id,
+      title: fact.title,
+      source: fact.source,
+      kind: projectPresentation ? "project" : "profile",
+      ...(projectPresentation ? { project: projectPresentation } : {}),
+    };
+  });
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...history,
@@ -168,6 +191,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   // A short SSE comment makes small early events pass through buffering proxies.
   res.write(`: stream-open${" ".repeat(2048)}\n\n`);
   res.write(sseEvent({ type: "status", value: search ? "searching" : "answering" }));
+  if (factSources.length) res.write(sseEvent({ type: "fact_sources", sources: factSources }));
+  if (potentialContact(input.message)) res.write(sseEvent({ type: "contact_prompt" }));
 
   // Start the archive write alongside generation; a sleeping database never delays the first token.
   const archiveTurnPromise = archiveEnabled() ? beginArchiveTurn({
@@ -213,6 +238,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
         model,
         provider,
         citations,
+        factSources,
       });
     } catch (error) {
       console.error("Unable to finalize archived chat turn", error);

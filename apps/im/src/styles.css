@@ -103,8 +103,25 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 .message-user .message-head { justify-content: flex-end; }
 .message-head strong { color: var(--paper); font-size: 13px; font-weight: 500; }
 .message-head time { color: var(--muted); font: 10px/1 var(--mono); }
-.message-body p { margin: 4px 0 0; color: var(--paper-2); font-size: 15px; line-height: 1.9; white-space: pre-wrap; }
-.message-user .message-body p { color: var(--muted-2); }
+.message-markdown { margin-top: 4px; color: var(--paper-2); font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
+.message-markdown > :first-child { margin-top: 0; }
+.message-markdown > :last-child { margin-bottom: 0; }
+.message-markdown p { margin: 0 0 10px; white-space: pre-wrap; }
+.message-markdown h1, .message-markdown h2, .message-markdown h3, .message-markdown h4 { margin: 16px 0 7px; color: var(--paper); font-size: 1.12em; line-height: 1.45; font-weight: 600; }
+.message-markdown h1 { font-size: 1.22em; }
+.message-markdown ul, .message-markdown ol { display: grid; gap: 3px; margin: 7px 0 12px; padding-left: 1.45em; }
+.message-markdown li { padding-left: 2px; }
+.message-markdown blockquote { margin: 10px 0; border-left: 2px solid var(--sun); padding: 2px 0 2px 12px; color: var(--muted-2); }
+.message-markdown blockquote p { margin: 0; }
+.message-markdown code { border: 1px solid rgba(239,233,220,.1); padding: 1px 4px; background: rgba(239,233,220,.06); color: var(--mint); font: .88em/1.6 var(--mono); }
+.message-markdown pre { overflow: auto; margin: 10px 0 13px; border: 1px solid var(--line); padding: 12px; background: rgba(0,0,0,.2); }
+.message-markdown pre code { border: 0; padding: 0; background: transparent; color: var(--paper-2); }
+.message-markdown hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+.message-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+.message-markdown th, .message-markdown td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; }
+.message-markdown th { color: var(--paper); background: rgba(239,233,220,.06); }
+.message-markdown a { color: var(--mint); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.user-markdown { color: var(--muted-2); }
 .stream-caret { display: inline-block; width: 5px; height: 17px; margin-left: 4px; vertical-align: -2px; background: var(--mint); animation: blink 1s steps(2, start) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .searching-state { display: inline-flex; align-items: center; gap: 9px; margin-top: 8px; color: var(--mint); font-size: 13px; }
@@ -115,6 +132,19 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 @keyframes thinking-dots { 0% { width: 0; } 33% { width: 6px; } 66% { width: 12px; } 100% { width: 18px; } }
 .inline-sources { display: inline-flex; align-items: center; gap: 6px; margin-top: 13px; border: 0; border-bottom: 1px solid rgba(110,224,198,.35); padding: 0 0 2px; background: none; color: var(--mint); font-size: 11px; }
 .inline-sources:hover { border-color: var(--mint); }
+.message-sources { margin-top: 8px; }
+.project-source-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin-top: 7px; }
+.project-source { display: flex; align-items: center; gap: 9px; min-width: 0; border: 1px solid rgba(239,233,220,.14); padding: 8px 9px; background: rgba(239,233,220,.035); color: var(--paper-2); text-decoration: none; transition: border-color .18s, background .18s; }
+.project-source:hover { border-color: rgba(110,224,198,.45); background: rgba(110,224,198,.06); }
+.project-source > img, .project-source-mark { flex: none; width: 34px; height: 34px; object-fit: cover; }
+.project-source-mark { display: grid; place-items: center; border: 1px solid rgba(110,224,198,.26); color: var(--mint); }
+.project-source-copy { display: grid; min-width: 0; flex: 1; gap: 1px; }
+.project-source-copy small { overflow: hidden; color: var(--mint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.project-source-copy strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.project-source-copy > span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.contact-prompt { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 15px; border-left: 2px solid var(--sun); padding: 10px 12px; background: rgba(228,199,107,.065); color: var(--muted-2); font-size: 12px; }
+.contact-prompt a { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--sun); text-decoration: none; }
+.contact-prompt a:hover { color: var(--paper); }
 .error-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 24px 48px; padding: 10px 12px; border-left: 2px solid var(--coral); background: rgba(231,123,91,.08); color: var(--muted-2); font-size: 12px; }
 .error-note span { color: var(--coral); font: 10px/1 var(--mono); }
 .error-note button { border: 0; border-bottom: 1px solid var(--coral); padding: 0; background: none; color: var(--paper); font-size: 12px; }

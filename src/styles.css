@@ -421,6 +421,28 @@ a { color: inherit; }
 .chat-caret { display: inline-block; width: 5px; height: 15px; margin-left: 3px; vertical-align: -2px; background: var(--mint); animation: blink 1s steps(2, start) infinite; }
 .chat-open { display: inline-block; margin-top: 14px; color: var(--ink-2); font-size: 12px; text-decoration: none; border-bottom: 1px solid var(--line); }
 .chat-open:hover { color: var(--ink); border-color: var(--ink); }
+.home-chat-markdown { font-size: inherit; line-height: inherit; overflow-wrap: anywhere; }
+.home-chat-markdown > :first-child { margin-top: 0; }
+.home-chat-markdown > :last-child { margin-bottom: 0; }
+.home-chat-markdown p { margin: 0 0 8px; }
+.home-chat-markdown h1, .home-chat-markdown h2, .home-chat-markdown h3, .home-chat-markdown h4 { margin: 10px 0 5px; font-size: 1.08em; line-height: 1.45; }
+.home-chat-markdown ul, .home-chat-markdown ol { display: grid; gap: 3px; margin: 6px 0 10px; padding-left: 1.4em; }
+.home-chat-markdown blockquote { margin: 8px 0; border-left: 2px solid var(--mint); padding-left: 10px; color: var(--ink-2); }
+.home-chat-markdown pre, .home-chat-markdown .markdown-table-scroll { max-width: 100%; overflow: auto; }
+.home-chat-markdown pre { padding: 8px; background: rgba(0,0,0,.07); }
+.home-chat-markdown code { font-family: var(--mono); overflow-wrap: anywhere; }
+.home-chat-markdown a { color: #147765; text-decoration: underline; text-underline-offset: 2px; }
+.home-chat-sources { justify-self: start; width: min(94%, 360px); display: grid; gap: 5px; margin-top: 3px; color: var(--ink-3); font-size: 10px; }
+.home-chat-sources > span { font: 10px/1.2 var(--mono); }
+.home-chat-source { display: grid; gap: 1px; border-left: 2px solid var(--mint); padding: 5px 8px; background: rgba(255,255,255,.34); }
+.home-chat-source small { color: var(--ink-3); font-size: 9px; }
+.home-chat-source strong { color: var(--ink); font-size: 11px; font-weight: 600; }
+.home-chat-source a { justify-self: start; color: #147765; font-size: 10px; text-decoration: none; }
+.home-chat-source a:hover { text-decoration: underline; }
+.home-chat-source-web { border-color: var(--orange); }
+.home-contact-prompt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: min(94%, 360px); margin-top: 5px; border-left: 2px solid #b78a25; padding: 7px 9px; background: rgba(255,229,0,.14); color: var(--ink-2); font-size: 11px; }
+.home-contact-prompt a { color: #604500; font-weight: 600; text-decoration: none; }
+.home-contact-prompt a:hover { text-decoration: underline; }
 @keyframes blink { 50% { opacity: 0; } }
 
 /* now */

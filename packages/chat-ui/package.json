@@ -1,0 +1,14 @@
+{
+  "name": "@mout/chat-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/MarkdownContent.tsx",
+  "types": "./src/MarkdownContent.tsx",
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "dependencies": {
+    "marked": "^15.0.0"
+  }
+}

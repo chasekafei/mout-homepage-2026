@@ -16,6 +16,7 @@
     "tags": ["超参数", "Super Intern", "AI 主播", "工具", "Skill"],
     "keywords": ["AI 产品", "AI 产品项目", "AI VTuber", "AI 陪玩", "多工具 Agent", "产品矩阵"],
     "queries": ["你做过哪些 AI 产品", "你做过什么产品", "你做过什么 AI 项目", "你做过哪些 AI 应用", "你做过哪些应用", "你做过什么应用", "你的 AI 应用有哪些", "你做过什么 AI", "Super Intern 是什么产品", "你在 Super Intern 做了什么"],
+    "project": { "name": "AI Agent 经历", "href": "/work/agent", "eyebrow": "AI 产品与 Agent" },
     "source": "src/content/site.ts / WORK.agent",
     "visibility": "public"
   },
@@ -36,6 +37,7 @@
     "tags": ["MouT.me", "个人网站", "3D", "数字分身"],
     "keywords": ["网站设计", "个人网站", "3D 网站", "数字分身", "作品集"],
     "queries": ["为什么做这个网站", "MouT.me 是什么", "你的个人网站有什么特别", "这个 3D 网站怎么设计的"],
+    "project": { "name": "进入 MouT.me", "href": "/now", "eyebrow": "个人网站" },
     "source": "README.md / src/content/site.ts",
     "visibility": "public"
   },
@@ -46,6 +48,7 @@
     "tags": ["CrossPod", "播客", "独立产品", "朋友"],
     "keywords": ["播客产品", "朋友分身", "AI 播客", "独立产品"],
     "queries": ["CrossPod 是什么", "为什么做 CrossPod", "为什么做这个播客产品", "朋友的分身怎么一起播客", "你做过什么独立产品"],
+    "project": { "name": "CrossPod", "href": "/create/podcast", "eyebrow": "串台播客" },
     "source": "src/panels/MiscPanels.tsx / src/content/site.ts",
     "visibility": "public"
   },
@@ -56,6 +59,7 @@
     "tags": ["游戏", "小游戏", "创业", "设计"],
     "keywords": ["游戏经历", "游戏创业", "小游戏策划", "游戏设计", "互动营销"],
     "queries": ["你从什么时候开始玩游戏", "你做过游戏行业吗", "你的游戏经历是什么", "你为什么关心游戏设计", "你为什么喜欢游戏"],
+    "project": { "name": "游戏经历", "href": "/work/games", "eyebrow": "游戏与设计" },
     "source": "src/content/site.ts / WORK.games",
     "visibility": "public"
   }

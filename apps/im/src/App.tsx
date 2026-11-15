@@ -1,6 +1,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { selectHistoryWithinBudget } from "@mout/agent-core";
 import { AgentEvent, AgentMode, AgentSource, ChatMessage, isMockMode, streamChat, warmAgentBackend } from "./api";
+import { MarkdownContent } from "@mout/chat-ui";
 import "./styles.css";
 
 type IconName = "arrow" | "back" | "book" | "chevron" | "close" | "external" | "globe" | "spark";
@@ -132,19 +133,48 @@ function timeLabel(timestamp: number) {
 }
 
 function SourceRow({ source }: { source: AgentSource }) {
-  const external = source.kind === "web" && source.url;
+  let externalUrl: string | null = null;
+  if (source.kind === "web" && source.url) {
+    try {
+      const candidate = new URL(source.url);
+      if (candidate.protocol === "http:" || candidate.protocol === "https:") externalUrl = candidate.href;
+    } catch {
+      externalUrl = null;
+    }
+  }
   const content = (
     <>
       <span className={`source-mark source-${source.kind}`} aria-hidden><Icon name={source.kind === "web" ? "globe" : "book"} size={15} /></span>
-      <span className="source-copy"><strong>{source.title}</strong><small>{source.detail ?? (source.kind === "web" ? "实时来源" : "公开资料")}</small></span>
-      {external && <Icon name="external" size={14} />}
+      <span className="source-copy"><strong>{source.title}</strong><small>{source.detail ?? source.source ?? (source.kind === "web" ? "实时来源" : "公开资料")}</small></span>
+      {externalUrl && <Icon name="external" size={14} />}
     </>
   );
-  return external ? <a className="source-row" href={source.url} target="_blank" rel="noreferrer">{content}</a> : <div className="source-row">{content}</div>;
+  return externalUrl ? <a className="source-row" href={externalUrl} target="_blank" rel="noopener noreferrer nofollow">{content}</a> : <div className="source-row">{content}</div>;
 }
 
 function AssistantMark({ small = false }: { small?: boolean }) {
   return <span className={`assistant-mark ${small ? "assistant-mark-small" : ""}`}><img src="/avatar-pixel.png" alt="" className="pixel" />{!small && <i />}</span>;
+}
+
+function safeLocalPath(value: string | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : null;
+  } catch { return null; }
+}
+
+function ProjectSource({ source }: { source: AgentSource }) {
+  const href = safeLocalPath(source.project?.href);
+  if (!href || !source.project) return null;
+  const image = safeLocalPath(source.project.image);
+  return (
+    <a className="project-source" href={`https://mout.me${href}`} target="_blank" rel="noreferrer">
+      {image ? <img src={`https://mout.me${image}`} alt="" loading="lazy" /> : <span className="project-source-mark"><Icon name="spark" size={17} /></span>}
+      <span className="project-source-copy">{source.project.eyebrow && <small>{source.project.eyebrow}</small>}<strong>{source.project.name}</strong><span>{source.title}</span></span>
+      <Icon name="external" size={15} />
+    </a>
+  );
 }
 
 export function App() {
@@ -275,7 +305,19 @@ export function App() {
         if (event.type === "meta") setSearching(Boolean(event.searching));
         if (event.type === "source") {
           setSources((current) => current.some((item) => item.id === event.source.id) ? current : [...current, event.source]);
+          setMessages((current) => current.map((message) => message.id === assistant.id
+            ? { ...message, sources: [...(message.sources ?? []).filter((source) => source.id !== event.source.id), event.source] }
+            : message));
           setShowContext(true);
+        }
+        if (event.type === "fact_sources") {
+          const factSources = event.sources.filter((source) => source.kind === "profile" || source.kind === "project");
+          setSources((current) => [...current.filter((source) => source.kind === "web"), ...factSources]);
+          setMessages((current) => current.map((message) => message.id === assistant.id ? { ...message, sources: factSources } : message));
+          if (factSources.length) setShowContext(true);
+        }
+        if (event.type === "contact_prompt") {
+          setMessages((current) => current.map((message) => message.id === assistant.id ? { ...message, contactPrompt: true } : message));
         }
         if (event.type === "archive_warning") setArchiveWarning(event.message);
         if (event.type === "delta") {
@@ -348,7 +390,18 @@ export function App() {
                 {messages.map((message) => (
                   <article className={`message message-${message.role}`} key={message.id}>
                     {message.role === "assistant" ? <AssistantMark small /> : <span className="user-mark">你</span>}
-                    <div className="message-body"><div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>{message.role === "assistant" && message.pending && !message.content ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找公开来源</span></div> : <div className="thinking-state">正在组织回答<span className="thinking-dots" aria-hidden>···</span></div> : <p>{message.content}{message.pending && <span className="stream-caret" />}</p>}{message.role === "assistant" && message.content && !message.pending && sources.length > 0 && message.id === messages.at(-1)?.id && <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />基于 {sources.length} 个来源</button>}</div>
+                    <div className="message-body">
+                      <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>
+                      {message.role === "assistant" && message.pending && !message.content
+                        ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找公开来源</span></div> : <div className="thinking-state">正在组织回答<span className="thinking-dots" aria-hidden>···</span></div>
+                        : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
+                      {message.role === "assistant" && message.pending && message.content && <span className="stream-caret" />}
+                      {message.role === "assistant" && !!message.sources?.length && <div className="message-sources">
+                        <button className="inline-sources" type="button" onClick={() => { setSources(message.sources ?? []); setShowContext(true); }}><Icon name="book" size={14} />本轮检索资料 {message.sources.length}</button>
+                        <div className="project-source-list">{message.sources.filter((source) => source.kind === "project" && source.project).map((source) => <ProjectSource key={source.id} source={source} />)}</div>
+                      </div>}
+                      {message.role === "assistant" && message.contactPrompt && <div className="contact-prompt"><span>想继续聊工作或合作？</span><a href="mailto:hello@mout.me?subject=%E6%9D%A5%E8%87%AA%20MouT.me%20AI%20%E5%88%86%E8%BA%AB">联系 MouT<Icon name="external" size={14} /></a></div>}
+                    </div>
                   </article>
                 ))}
                 {archiveWarning && <p className="archive-warning" role="status">{archiveWarning}</p>}
@@ -368,8 +421,8 @@ export function App() {
         </main>
 
         <aside className={`context-rail ${showContext ? "is-open" : ""}`} aria-label="回答来源">
-          <div className="context-header"><div><span className="eyebrow">CONTEXT</span><h2>这次回答</h2></div><button type="button" onClick={() => setShowContext(false)} aria-label="关闭来源面板"><Icon name="close" size={18} /></button></div>
-          {searching ? <div className="context-searching"><span className="search-ring" /><strong>正在查找最新信息</strong><p>只在问题需要时连接公开网络。</p></div> : sources.length > 0 ? <><p className="context-lede">回答优先使用 MouT 的公开资料；外部来源会单独标记。</p><div className="source-list">{sources.map((source) => <SourceRow key={source.id} source={source} />)}</div></> : <div className="context-empty"><Icon name="book" size={22} /><p>当回答引用资料时，来源会出现在这里。</p></div>}
+          <div className="context-header"><div><span className="eyebrow">CONTEXT</span><h2>本轮检索资料</h2></div><button type="button" onClick={() => setShowContext(false)} aria-label="关闭来源面板"><Icon name="close" size={18} /></button></div>
+          {searching ? <div className="context-searching"><span className="search-ring" /><strong>正在查找最新信息</strong><p>只在问题需要时连接公开网络。</p></div> : sources.length > 0 ? <><p className="context-lede">这些是本轮检索到并注入上下文的个人资料与外部来源，不代表模型一定逐条引用。</p><div className="source-list">{sources.map((source) => <SourceRow key={source.id} source={source} />)}</div></> : <div className="context-empty"><Icon name="book" size={22} /><p>本轮检索到的资料会显示在这里。</p></div>}
           <div className="context-bottom"><span className="context-signal" /><span>{mode === "profile" ? "个人资料已启用" : "实时搜索已启用"}</span></div>
         </aside>
       </div>

@@ -95,10 +95,28 @@
 .archive-message-meta time { font-variant-numeric: tabular-nums; }
 .archive-message-meta span { padding: 1px 5px; background: #e8ece8; color: var(--admin-muted); font: 9px/1.5 var(--mono); }
 .archive-message-meta .archive-message-status { background: var(--admin-coral-soft); color: var(--admin-coral); }
-.archive-message p { margin: 7px 0 0; color: #344341; font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.archive-markdown { margin-top: 7px; color: #344341; font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.archive-markdown > :first-child { margin-top: 0; }
+.archive-markdown > :last-child { margin-bottom: 0; }
+.archive-markdown p { margin: 0 0 9px; white-space: pre-wrap; }
+.archive-markdown h1, .archive-markdown h2, .archive-markdown h3, .archive-markdown h4 { margin: 14px 0 5px; color: var(--admin-ink); font-size: 1.08em; line-height: 1.45; }
+.archive-markdown ul, .archive-markdown ol { display: grid; gap: 3px; margin: 6px 0 10px; padding-left: 1.4em; }
+.archive-markdown blockquote { margin: 8px 0; border-left: 2px solid var(--admin-yellow); padding-left: 10px; color: var(--admin-muted); }
+.archive-markdown pre, .archive-markdown .markdown-table-scroll { max-width: 100%; overflow: auto; }
+.archive-markdown pre { padding: 8px; background: rgba(29,41,41,.06); }
+.archive-markdown code { font-family: var(--mono); overflow-wrap: anywhere; }
+.archive-markdown a { color: var(--admin-teal); text-decoration: underline; text-underline-offset: 2px; }
+.archive-fact-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; color: var(--admin-muted); font-size: 10px; }
+.archive-fact-sources > strong { margin-right: 2px; font-size: 9px; font-weight: 600; }
+.archive-fact-sources > span { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--admin-line); padding: 3px 6px; background: var(--admin-paper); color: var(--admin-ink); }
+.archive-fact-sources small { color: var(--admin-soft); font-size: 9px; }
 .archive-user { padding-left: 18px; border-left: 2px solid #cfd7d2; }
 .archive-assistant { padding-left: 18px; border-left: 2px solid #81b9a7; }
 .archive-citations { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.archive-fact-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; color: var(--admin-muted); font-size: 10px; }
+.archive-fact-sources > strong { margin-right: 2px; font-size: 9px; font-weight: 600; }
+.archive-fact-sources > span { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--admin-line); padding: 3px 6px; background: var(--admin-paper); color: var(--admin-ink); }
+.archive-fact-sources small { color: var(--admin-soft); font-size: 9px; }
 .archive-citations a { display: inline-flex; align-items: center; gap: 5px; color: var(--admin-teal); font-size: 10px; text-decoration: none; }
 .archive-citations a:hover { text-decoration: underline; }
 .archive-citations svg { width: 12px; height: 12px; }

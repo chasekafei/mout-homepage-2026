@@ -8,6 +8,8 @@ export type ChatMessage = {
   content: string;
   createdAt: number;
   pending?: boolean;
+  sources?: AgentSource[];
+  contactPrompt?: boolean;
 };
 
 export type AgentSource = {
@@ -16,6 +18,8 @@ export type AgentSource = {
   kind: "profile" | "project" | "web";
   detail?: string;
   url?: string;
+  source?: string;
+  project?: { name: string; href: string; image?: string; eyebrow?: string };
 };
 
 export type AgentMode = "profile" | "current";
@@ -24,6 +28,8 @@ export type AgentEvent =
   | { type: "meta"; mode: AgentMode; provider?: string; model?: string; searching?: boolean }
   | { type: "delta"; text: string }
   | { type: "source"; source: AgentSource }
+  | { type: "fact_sources"; sources: AgentSource[] }
+  | { type: "contact_prompt" }
   | { type: "archive_warning"; message: string }
   | { type: "done" }
   | { type: "error"; message: string };
@@ -61,7 +67,7 @@ function mockAnswer(input: string): { answer: string; sources: AgentSource[]; se
     return {
       answer: "我一直觉得，Agent 最重要的不是工具数量，而是它能不能进入真实的 context。做 Super Intern 的时候，我更在意 Agent 能不能待在用户已经在用的 Discord、Telegram 和工作流里，而不是让大家再搬去一个新的聊天窗口。",
       sources: [
-        { id: "work-agent", title: "AI Agent：Super Intern 与 context", kind: "project", detail: "个人经历 · AI 产品负责人" },
+        { id: "agent-work", title: "AI Agent 经历", kind: "project", detail: "个人经历 · AI 产品负责人", source: "src/content/site.ts / WORK.agent", project: { name: "AI Agent 与 Super Intern", href: "/work/agent", eyebrow: "AI 产品经历" } },
       ],
       searching: false,
     };
@@ -70,7 +76,7 @@ function mockAnswer(input: string): { answer: string; sources: AgentSource[]; se
     return {
       answer: "我做过的 AI 产品大致分成几条线：起司是 AI 拍照社交，热情小美是 AI VTuber，fakers 是帮用户筛选 AI 信息的社区，Super Intern 则是能在 Discord 和 Telegram 里调用工具的通用 Agent。它们看起来跨度很大，但我一直在追同一个问题：AI 怎么进入人已经在用的场景。",
       sources: [
-        { id: "ai-projects", title: "AI 产品经历", kind: "project", detail: "公开资料 · 超参数与 Super Intern" },
+        { id: "agent-work", title: "AI 产品经历", kind: "project", detail: "公开资料 · 超参数与 Super Intern", source: "src/content/site.ts / WORK.agent", project: { name: "AI Agent 与 Super Intern", href: "/work/agent", eyebrow: "AI 产品经历" } },
       ],
       searching: false,
     };
@@ -102,10 +108,12 @@ function mockAnswer(input: string): { answer: string; sources: AgentSource[]; se
 const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 async function streamMock(request: ChatRequest, onEvent: (event: AgentEvent) => void) {
-  const { answer, sources, searching } = mockAnswer(request.messages.at(-1)?.content ?? "");
+  const latestQuestion = request.messages.at(-1)?.content ?? "";
+  const { answer, sources, searching } = mockAnswer(latestQuestion);
   onEvent({ type: "meta", mode: searching ? "current" : "profile", provider: "gptproto", model: "gemini-3.8-flash", searching });
   if (searching) await sleep(280);
-  for (const source of sources) onEvent({ type: "source", source });
+  if (sources.length) onEvent({ type: "fact_sources", sources });
+  if (/(求职|找工作|应聘|岗位|面试|内推|合作|项目合作|联系你|工作机会|collaborat|job opportunity)/iu.test(latestQuestion)) onEvent({ type: "contact_prompt" });
   for (const word of answer.split(/(?<=[，。！？；：])/u)) {
     onEvent({ type: "delta", text: word });
     await sleep(28);
@@ -126,6 +134,15 @@ function parseEventLine(line: string): AgentEvent | null {
     if (payload.type === "citation" && typeof payload.title === "string" && typeof payload.url === "string") {
       return { type: "source", source: { id: payload.url, title: payload.title, kind: "web", detail: "实时来源", url: payload.url } };
     }
+    if (payload.type === "fact_sources" && Array.isArray(payload.sources)) {
+      const sources = payload.sources.filter((source): source is AgentSource => Boolean(source)
+        && typeof source === "object"
+        && typeof (source as AgentSource).id === "string"
+        && typeof (source as AgentSource).title === "string"
+        && ((source as AgentSource).kind === "profile" || (source as AgentSource).kind === "project"));
+      return { type: "fact_sources", sources };
+    }
+    if (payload.type === "contact_prompt") return { type: "contact_prompt" };
     if (payload.type === "done") return { type: "done" };
     if (payload.type === "archive_warning") return { type: "archive_warning", message: typeof payload.message === "string" ? payload.message : "本轮对话没有写入收件箱" };
     if (payload.type === "error") return { type: "error", message: typeof payload.message === "string" ? payload.message : "上游请求失败" };

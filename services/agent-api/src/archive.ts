@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool, type PoolClient } from "pg";
+import type { FactSource } from "@mout/agent-core";
 import { config } from "./config.js";
 
 const pool = config.databaseUrl
@@ -40,13 +41,16 @@ async function ensureSchema() {
   if (!schemaPromise) {
     schemaPromise = (async () => {
       const currentDir = dirname(fileURLToPath(import.meta.url));
-      const sql = await readFile(resolve(currentDir, "../sql/001_archive.sql"), "utf8");
+      const migrationDir = resolve(currentDir, "../sql");
+      const migrations = (await readdir(migrationDir)).filter((file) => /^\d+.*\.sql$/.test(file)).sort();
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
         // Multiple API replicas can warm up simultaneously; serialize the initial DDL.
         await client.query("SELECT pg_advisory_xact_lock(738511204)");
-        await client.query(sql);
+        for (const migration of migrations) {
+          await client.query(await readFile(resolve(migrationDir, migration), "utf8"));
+        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK").catch(() => undefined);
@@ -135,14 +139,15 @@ export async function completeArchiveTurn(args: {
   model: string;
   provider: string;
   citations: Array<{ title: string; url: string }>;
+  factSources: FactSource[];
 }) {
   if (!pool) return;
   await ensureSchema();
   await pool.query(
     `UPDATE conversation_messages
-       SET content = $1, status = $2, model = $3, provider = $4, citations = $5::jsonb
-     WHERE id = $6 AND conversation_id = $7 AND role = 'assistant'`,
-    [args.content, args.status, args.model, args.provider, JSON.stringify(args.citations), args.assistantMessageId, args.conversationId],
+       SET content = $1, status = $2, model = $3, provider = $4, citations = $5::jsonb, fact_sources = $6::jsonb
+     WHERE id = $7 AND conversation_id = $8 AND role = 'assistant'`,
+    [args.content, args.status, args.model, args.provider, JSON.stringify(args.citations), JSON.stringify(args.factSources), args.assistantMessageId, args.conversationId],
   );
   await pool.query("UPDATE conversations SET last_activity_at = NOW() WHERE id = $1", [args.conversationId]);
 }
@@ -188,7 +193,7 @@ export async function getAdminConversation(id: string) {
   );
   if (!conversation.rowCount) return null;
   const messages = await pool.query(
-    `SELECT id::text, role, content, status, model, provider, citations, created_at AS "createdAt"
+    `SELECT id::text, role, content, status, model, provider, citations, fact_sources AS "factSources", created_at AS "createdAt"
      FROM conversation_messages WHERE conversation_id = $1 ORDER BY id ASC`,
     [id],
   );
