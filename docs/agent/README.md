@@ -10,7 +10,9 @@
 
 ## Neon 对话归档
 
-创建 Neon Postgres 项目后，建议选择离 Railway API 较近的 region，并从 Neon 控制台复制 pooled connection string，作为 Railway 的 `DATABASE_URL`。API 在收到 `/v1/warmup` 或聊天请求时惰性建表；页面首次打开只做一次带 4 秒超时的预热，不会定时 ping。Neon 空闲后会暂停 compute；归档使用低连接数池，闲置连接 30 秒释放。
+创建 Neon Postgres 项目后，建议选择离 Railway API 较近的 region，并从 Neon 控制台复制 pooled connection string，作为 Railway 的 `DATABASE_URL`。Neon URL 常带 `sslmode=require`；API 会将驱动旧别名显式规范为等效的 `sslmode=verify-full`，保留 `channel_binding` 等其他参数。
+
+API 在收到 `/v1/warmup` 或聊天请求时惰性建表；页面首次打开只做一次带 4 秒超时的预热，不会定时 ping。Neon 空闲后会暂停 compute；归档使用低连接数池，闲置连接 30 秒释放。
 
 在 Railway 设置：
 

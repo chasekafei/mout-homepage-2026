@@ -4,10 +4,11 @@ import { fileURLToPath } from "node:url";
 import { Pool, type PoolClient } from "pg";
 import type { FactSource } from "@mout/agent-core";
 import { config } from "./config.js";
+import { normalizeDatabaseConnectionString } from "./connection-url.js";
 
 const pool = config.databaseUrl
   ? new Pool({
-    connectionString: config.databaseUrl,
+    connectionString: normalizeDatabaseConnectionString(config.databaseUrl),
     max: 3,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 8_000,
