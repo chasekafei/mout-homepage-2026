@@ -51,8 +51,9 @@ export const config = {
   embeddingRetryDelayMs: Math.max(0, Number(process.env.AGENT_EMBEDDING_RETRY_DELAY_MS || 250)),
   maxHistoryMessages: 256,
   maxContextFacts: Number(process.env.MAX_CONTEXT_FACTS || 20),
-  upstreamHeaderTimeoutMs: duration(process.env.UPSTREAM_HEADER_TIMEOUT_MS, 15_000),
-  // Keep legacy UPSTREAM_TIMEOUT_MS from silently restoring the old 60s cap.
-  upstreamStreamTimeoutMs: Math.max(180_000, duration(process.env.UPSTREAM_STREAM_TIMEOUT_MS || process.env.UPSTREAM_TIMEOUT_MS, 180_000)),
-  upstreamStreamIdleTimeoutMs: duration(process.env.UPSTREAM_STREAM_IDLE_TIMEOUT_MS, 60_000),
+  // Keep previously deployed values from silently restoring the shorter limits
+  // while GPTProto's Gemini route is being investigated.
+  upstreamHeaderTimeoutMs: Math.max(120_000, duration(process.env.UPSTREAM_HEADER_TIMEOUT_MS, 120_000)),
+  upstreamStreamTimeoutMs: Math.max(300_000, duration(process.env.UPSTREAM_STREAM_TIMEOUT_MS || process.env.UPSTREAM_TIMEOUT_MS, 300_000)),
+  upstreamStreamIdleTimeoutMs: Math.max(90_000, duration(process.env.UPSTREAM_STREAM_IDLE_TIMEOUT_MS, 90_000)),
 };

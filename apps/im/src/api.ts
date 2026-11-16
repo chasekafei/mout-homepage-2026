@@ -43,7 +43,7 @@ type ChatRequest = {
 
 const API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
 const MOCK = import.meta.env.VITE_AGENT_MOCK !== "false" && !API_URL;
-const CHAT_TIMEOUT_MS = 210_000;
+const CHAT_TIMEOUT_MS = 360_000;
 let warmupPromise: Promise<void> | null = null;
 
 export async function warmAgentBackend() {
