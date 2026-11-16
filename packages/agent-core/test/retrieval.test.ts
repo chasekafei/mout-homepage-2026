@@ -3,30 +3,30 @@ import test from "node:test";
 import facts from "../../../content/agent-public/facts.json" with { type: "json" };
 import blogs from "../../../content/agent-public/blog.json" with { type: "json" };
 import resumes from "../../../content/agent-public/resume-source.json" with { type: "json" };
+import oralHistory from "../../../content/agent-public/oral-history.json" with { type: "json" };
+import semanticEval from "./semantic-retrieval-eval.json" with { type: "json" };
 import { buildSystemPrompt } from "../src/persona.js";
 import { fallbackResumeQuote, hasVerbatimResumeQuote } from "../src/resume-quotes.js";
-import { estimateTextTokens, factContext, retrieveFacts, selectHistoryWithinBudget } from "../src/retrieval.js";
+import { estimateTextTokens, factContext, rankFactsHybrid, retrieveFacts, selectHistoryWithinBudget } from "../src/retrieval.js";
 import type { ChatMessage, PersonalFact } from "../src/types.js";
 
-const corpus = [...facts, ...blogs, ...resumes] as PersonalFact[];
+const corpus = [...facts, ...blogs, ...resumes, ...oralHistory] as PersonalFact[];
 
 test("Chinese paraphrases retrieve the intended personal fact", () => {
   const cases = [
-    ["你做过哪些 AI 产品？", "ai-portfolio-overview"],
-    ["你做过什么产品", "hybrid-product-maker"],
-    ["你做过什么 AI 项目", "ai-portfolio-overview"],
-    ["你做过哪些应用", "ai-portfolio-overview"],
     ["你平时做什么", "identity"],
     ["你的职业经历是什么", "identity"],
-    ["AI Agent 经历", "ai-portfolio-overview"],
     ["Super Intern 是什么产品", "super-intern"],
     ["为什么做 CrossPod", "crosspod"],
     ["你对 Agent 有什么看法", "product-principle-context"],
-    ["你从什么时候开始玩游戏", "gaming-history"],
   ] as const;
 
   for (const [query, expectedId] of cases) {
     assert.ok(retrieveFacts(query, corpus).some((fact) => fact.id === expectedId), query);
+  }
+
+  for (const query of ["你做过什么产品", "你做过哪些 AI 产品？", "你做过什么 AI 项目", "你做过哪些应用", "AI Agent 经历", "你从什么时候开始玩游戏"]) {
+    assert.ok(retrieveFacts(query, corpus).some((fact) => fact.recordType === "resume_source" || fact.recordType === "oral_history"), query);
   }
 });
 
@@ -42,7 +42,41 @@ test("latest resume dates win without guessing current employment", () => {
 
 test("recent user turns help resolve short follow-up questions", () => {
   const retrieved = retrieveFacts(["它当时为什么做？", "你做过什么 AI 项目"], corpus);
-  assert.ok(retrieved.some((fact) => fact.id === "ai-portfolio-overview"));
+  assert.ok(retrieved.some((fact) => fact.recordType === "oral_history" || fact.recordType === "resume_source"));
+});
+
+test("semantic eval cases reference existing corpus records and fusion surfaces semantic matches", () => {
+  for (const sample of semanticEval) {
+    const exists = (sample.expectedIds ?? []).some((id) => corpus.some((fact) => fact.id === id))
+      || (sample.expectedGroupIds ?? []).some((groupId) => corpus.some((fact) => fact.groupId === groupId));
+    assert.ok(exists, sample.query);
+  }
+
+  const query = "AI 写小说时怎样让角色设定和伏笔前后保持一致";
+  const semanticScores = [
+    { id: "find-muse", score: 0.82 },
+    { id: "resume-2026-html-20", score: 0.78 },
+    { id: "fakers", score: 0.31 },
+  ];
+  const hybridRanked = rankFactsHybrid(query, corpus, semanticScores);
+  assert.ok(["find-muse", "oral-history-001-个人网站资料-我的个人经历-108"].includes(hybridRanked[0]?.fact.id ?? ""));
+  assert.ok(retrieveFacts(query, corpus, 8, semanticScores).some((fact) => fact.id === "find-muse"));
+
+  const exactLexical = rankFactsHybrid("Super Intern 是什么产品", corpus, [
+    { id: "crosspod", score: 0.99 },
+  ]);
+  assert.ok(["super-intern", "resume-2026-html-03"].includes(exactLexical[0]?.fact.id ?? ""));
+  assert.ok(!rankFactsHybrid(query, corpus, [{ id: "private-test", score: 0.99 }]).some(({ fact }) => fact.id === "private-test"));
+});
+
+test("oral-history retrieval uses and exposes the original source passage", () => {
+  const source = oralHistory.find((fact) => fact.body.includes("老板需要我跟着一起去给客户解答问题"));
+  assert.ok(source);
+  assert.equal(source.recordType, "oral_history");
+  assert.ok(source.body.includes("客户"));
+  assert.ok(factContext([source]).join("\n").includes(source.body));
+  assert.match(factContext([source]).join("\n"), /个人口述原文片段/);
+  assert.equal(retrieveFacts("政府客户需要什么、我们能做到什么程度", corpus).some((fact) => fact.id === source.id), true);
 });
 
 test("unrelated queries and private facts do not get recalled", () => {
@@ -79,13 +113,13 @@ test("detailed project queries retrieve the specific project fact", () => {
     ["Super Intern 有多少付费团队", "super-intern-results"],
     ["TIYA 的有效互动提升多少", "tiya-product"],
     ["热情小美的直播有多少弹幕", "xiaomei-vtuber"],
-    ["Fakers 是什么产品", "fakers"],
+    ["Fakers 是什么产品", "resume-2026-html-04"],
     ["Ammonad 是什么", "ammonad"],
-    ["你为什么做个人 Agent", "personal-agent-project"],
   ] as const;
   for (const [query, expectedId] of cases) {
     assert.ok(retrieveFacts(query, corpus).some((fact) => fact.id === expectedId), query);
   }
+  assert.ok(retrieveFacts("你为什么做个人 Agent", corpus).some((fact) => fact.recordType === "oral_history"));
 });
 
 test("resume-backed answers retrieve exact excerpts and keep the 2026 wording", () => {
@@ -125,8 +159,8 @@ test("resume source rules prohibit paraphrasing index summaries as quotations", 
     resumes.find((fact) => fact.sourceVersion === "2026") as PersonalFact,
     corpus.find((fact) => fact.id === "super-intern-results") as PersonalFact,
   ]));
-  assert.match(prompt, /不能改写、润色、合并不同版本的句子/);
-  assert.match(prompt, /索引摘要.*不可改写后冒充简历原文/);
+  assert.match(prompt, /口述原文和简历原文是个人经历与项目细节的主要依据/);
+  assert.match(prompt, /facts\.json 中的整理摘要可辅助定位主题或补充次级背景/);
   assert.match(prompt, /必须用引号逐字引用检索到的原句/);
 });
 

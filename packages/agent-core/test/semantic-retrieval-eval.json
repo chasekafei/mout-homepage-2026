@@ -1,0 +1,46 @@
+[
+  {
+    "query": "和朋友的声音分身一起做一期播客，节目会更有归属感",
+    "expectedIds": ["crosspod", "resume-2026-html-19"]
+  },
+  {
+    "query": "为什么微信群报名接龙总是能传播，即使它又乱又刷屏",
+    "expectedGroupIds": ["blog-2019-微信更新接龙功能的思考-微信更新接龙功能的思考"]
+  },
+  {
+    "query": "AI 写小说时怎样让角色设定和伏笔前后保持一致",
+    "expectedIds": ["find-muse", "resume-2026-html-20"]
+  },
+  {
+    "query": "AI 角色的陪伴感怎么避免完全绑定在每句话的 token 成本上",
+    "expectedIds": ["product-principle-ai-relationship"]
+  },
+  {
+    "query": "不想让团队搬家换应用，Agent 怎么融入每天用的工作软件",
+    "expectedIds": ["product-principle-context", "super-intern"]
+  },
+  {
+    "query": "在语音房里做小游戏是为了增加什么，后来数据如何",
+    "expectedIds": ["tiya-product", "resume-2026-html-11"]
+  },
+  {
+    "query": "真人朋友和 AI 角色一起玩内置游戏的产品叫什么",
+    "expectedIds": ["its-your-turn", "resume-2026-html-07"]
+  },
+  {
+    "query": "给时尚品牌做过哪些带游戏机制的微信营销活动",
+    "expectedIds": ["webrand-campaign", "resume-2026-html-13"]
+  },
+  {
+    "query": "有没有把内容收集、事实核验和多模态发布串起来的 AI 营销案例",
+    "expectedIds": ["ammonad"]
+  },
+  {
+    "query": "AI 主播如何记住老观众并根据直播间发生的事情互动",
+    "expectedIds": ["xiaomei-vtuber", "resume-2026-html-08"]
+  },
+  {
+    "query": "政府客户需要什么、我们能做到什么程度，怎么讲才能打动客户",
+    "expectedIds": ["oral-history-001-个人网站资料-我的个人经历-12"]
+  }
+]

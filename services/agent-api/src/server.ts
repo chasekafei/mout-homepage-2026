@@ -11,15 +11,19 @@ import {
   selectHistoryWithinBudget,
   shouldSearch,
   buildRuntimeContext,
+  rankFacts,
+  shouldUseSemanticRetrieval,
   type FactSource,
   type AgentRequest,
   type ChatMessage,
   type ProviderEvent,
+  type SemanticFactScore,
   fallbackResumeQuote,
   hasVerbatimResumeQuote,
 } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
 import { providerModel, sseEvent, streamProvider } from "./provider.js";
+import { createEmbeddings, loadEmbeddingIndex, rankSemanticCandidates, type EmbeddingIndex } from "./embeddings.js";
 import {
   archiveEnabled,
   beginArchiveTurn,
@@ -33,18 +37,21 @@ import { adminConfigured, allowAdminLogin, clearAdminCookie, isAdminRequest, set
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../");
 let facts: Awaited<ReturnType<typeof loadFacts>> = [];
+let embeddingIndex: EmbeddingIndex | null = null;
 const hits = new Map<string, { count: number; resetAt: number }>();
 
 async function loadFacts() {
-  const [factsRaw, blogsRaw, resumesRaw] = await Promise.all([
+  const [factsRaw, blogsRaw, resumesRaw, oralHistoryRaw] = await Promise.all([
     readFile(resolve(root, "content/agent-public/facts.json"), "utf8"),
     readFile(resolve(root, "content/agent-public/blog.json"), "utf8"),
     readFile(resolve(root, "content/agent-public/resume-source.json"), "utf8"),
+    readFile(resolve(root, "content/agent-public/oral-history.json"), "utf8"),
   ]);
   return [
     ...(JSON.parse(factsRaw) as import("@mout/agent-core").PersonalFact[]),
     ...(JSON.parse(blogsRaw) as import("@mout/agent-core").PersonalFact[]),
     ...(JSON.parse(resumesRaw) as import("@mout/agent-core").PersonalFact[]),
+    ...(JSON.parse(oralHistoryRaw) as import("@mout/agent-core").PersonalFact[]),
   ];
 }
 
@@ -149,7 +156,39 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     input.message,
     ...(input.history ?? []).filter((message) => message.role === "user").slice(-2).map((message) => message.content),
   ];
-  const selectedFacts = retrieveFacts(retrievalQueries, facts, config.maxContextFacts);
+  res.statusCode = 200;
+  res.setHeader("X-Conversation-Id", conversationId);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Encoding", "identity");
+  res.socket?.setNoDelay(true);
+  res.flushHeaders?.();
+  res.write(`: stream-open${" ".repeat(2048)}\n\n`);
+  res.write(sseEvent({ type: "status", value: search ? "searching" : "answering" }));
+
+  let semanticScores: SemanticFactScore[] = [];
+  if (embeddingIndex && config.embeddings.apiKey
+    && shouldUseSemanticRetrieval(retrievalQueries, facts, config.embeddings.lexicalConfidenceThreshold)) {
+    try {
+      const semanticQueries = input.message.length < 100
+        ? [input.message, ...(retrievalQueries.slice(1, 3).map((query) => query.slice(0, 300)))]
+        : [input.message];
+      const queryTexts = semanticQueries.map((query) => query.slice(0, 4_000));
+      const vectors = await createEmbeddings(queryTexts, config.embeddings);
+      semanticScores = rankSemanticCandidates(
+        vectors.map((vector, index) => ({ vector, weight: index === 0 ? 1 : index === 1 ? 0.65 : 0.4 })),
+        embeddingIndex,
+        24,
+        config.embeddings.minSimilarity,
+      );
+    } catch (error) {
+      console.warn("Semantic retrieval unavailable; using lexical retrieval", error instanceof Error ? error.message : "EmbeddingError");
+    }
+  }
+  const selectedFacts = retrieveFacts(retrievalQueries, facts, config.maxContextFacts, semanticScores);
   const runtimeContext = buildRuntimeContext(new Date(), config.timeZone, input.timezone);
   const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext);
   const currentMessageTokens = estimateTextTokens(input.message) + 8;
@@ -179,7 +218,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
       id: fact.id,
       title: fact.recordType === "resume_source"
         ? `简历原文 · ${fact.sourceVersion} · ${fact.sourceFormat === "html" ? "HTML" : "PDF"} 第 ${fact.page} 页 · ${fact.title}`
-        : fact.recordType === "blog" ? `博客：${fact.title}` : fact.title,
+        : fact.recordType === "blog" ? `博客：${fact.title}`
+          : fact.recordType === "oral_history" ? `口述原文：${fact.title}` : fact.title,
       source: fact.recordType === "resume_source"
         ? `${fact.source}（${fact.sourceFormat === "html" ? "HTML" : "PDF"} 第 ${fact.page} 页）`
         : fact.recordType === "blog"
@@ -197,19 +237,6 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     { role: "user", content: input.message },
   ];
 
-  res.statusCode = 200;
-  res.setHeader("X-Conversation-Id", conversationId);
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Encoding", "identity");
-  res.socket?.setNoDelay(true);
-  res.flushHeaders?.();
-  // A short SSE comment makes small early events pass through buffering proxies.
-  res.write(`: stream-open${" ".repeat(2048)}\n\n`);
-  res.write(sseEvent({ type: "status", value: search ? "searching" : "answering" }));
   if (factSources.length) res.write(sseEvent({ type: "fact_sources", sources: factSources }));
   if (potentialContact(input.message)) res.write(sseEvent({ type: "contact_prompt" }));
 
@@ -377,7 +404,15 @@ const server = createServer(async (req, res) => {
   setCors(req, res);
   if (req.method === "OPTIONS") return res.end();
   if (!originAllowed(req.headers.origin)) return sendJson(res, 403, { error: "origin 不被允许" });
-  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, { ok: true, provider: config.defaultProvider, model: config.defaultProvider === "deepseek" ? config.deepseek.model : config.gptproto.model, corpusFacts: facts.length, archiveEnabled: archiveEnabled() });
+  if (req.method === "GET" && req.url === "/health") return sendJson(res, 200, {
+    ok: true,
+    provider: config.defaultProvider,
+    model: config.defaultProvider === "deepseek" ? config.deepseek.model : config.gptproto.model,
+    corpusFacts: facts.length,
+    archiveEnabled: archiveEnabled(),
+    semanticRetrievalEnabled: Boolean(embeddingIndex && config.embeddings.apiKey),
+    semanticRecords: embeddingIndex?.manifest.ids.length ?? 0,
+  });
   if (req.method === "GET" && req.url === "/v1/warmup") {
     try { return sendJson(res, 200, await warmArchive()); }
     catch (error) {
@@ -393,4 +428,10 @@ const server = createServer(async (req, res) => {
 });
 
 facts = await loadFacts();
+embeddingIndex = config.embeddings.apiKey ? await loadEmbeddingIndex(root, facts, config.embeddings) : null;
+if (embeddingIndex) {
+  console.log(`Semantic retrieval index loaded: ${embeddingIndex.manifest.ids.length} records, ${embeddingIndex.manifest.dimensions} dimensions`);
+} else {
+  console.log("Semantic retrieval index unavailable; using lexical retrieval");
+}
 server.listen(config.port, "0.0.0.0", () => console.log(`Agent API listening on http://0.0.0.0:${config.port}`));

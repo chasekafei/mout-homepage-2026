@@ -31,6 +31,8 @@ function terms(value: string): Set<string> {
 }
 
 export type RankedFact = { fact: PersonalFact; score: number };
+export type SemanticFactScore = { id: string; score: number };
+export const DEFAULT_SEMANTIC_LEXICAL_CONFIDENCE = 80;
 
 /** Lexical retrieval with Chinese n-grams, curated aliases, field weighting, and term rarity. */
 export function rankFacts(query: string | string[], facts: PersonalFact[]): RankedFact[] {
@@ -92,15 +94,67 @@ export function rankFacts(query: string | string[], facts: PersonalFact[]): Rank
       || a.fact.id.localeCompare(b.fact.id))
 }
 
+/** Weighted reciprocal-rank fusion keeps exact lexical matches dominant while adding semantic candidates. */
+export function rankFactsHybrid(
+  query: string | string[],
+  facts: PersonalFact[],
+  semanticScores: SemanticFactScore[],
+): RankedFact[] {
+  const lexical = rankFacts(query, facts);
+  const lexicalRelevant = lexical.filter(({ score }) => score >= 1.5);
+  const protectedLexical = lexicalRelevant.slice(0, 3);
+  const protectedIds = new Set(protectedLexical.map(({ fact }) => fact.id));
+  const lexicalRanks = new Map(lexicalRelevant
+    .filter(({ fact }) => !protectedIds.has(fact.id))
+    .map(({ fact }, index) => [fact.id, index + 4]));
+  const semanticRanks = new Map([...semanticScores]
+    .filter((item) => Number.isFinite(item.score) && item.score >= 0.2)
+    .sort((a, b) => b.score - a.score)
+    .map((item, index) => [item.id, index + 1]));
+  const byId = new Map(facts.filter((fact) => fact.visibility === "public").map((fact) => [fact.id, fact]));
+  const ids = new Set([...lexicalRanks.keys(), ...semanticRanks.keys()]);
+
+  const fused = [...ids]
+    .filter((id) => !protectedIds.has(id))
+    .flatMap((id) => {
+      const fact = byId.get(id);
+      if (!fact) return [];
+      const lexicalRank = lexicalRanks.get(id);
+      const semanticRank = semanticRanks.get(id);
+      const score = (lexicalRank ? 0.7 / (60 + lexicalRank) : 0)
+        + (semanticRank ? 0.3 / (60 + semanticRank) : 0);
+      return [{ fact, score }];
+    })
+    .sort((a, b) => b.score - a.score
+      || (b.fact.sourceVersion ?? "").localeCompare(a.fact.sourceVersion ?? "")
+      || a.fact.id.localeCompare(b.fact.id));
+  return [...protectedLexical, ...fused];
+}
+
+export function shouldUseSemanticRetrieval(
+  query: string | string[],
+  facts: PersonalFact[],
+  minimumLexicalConfidence = DEFAULT_SEMANTIC_LEXICAL_CONFIDENCE,
+): boolean {
+  return (rankFacts(query, facts)[0]?.score ?? 0) < minimumLexicalConfidence;
+}
+
 /** Avoids filling the prompt with weak matches when only a few facts are relevant. */
-export function retrieveFacts(query: string | string[], facts: PersonalFact[], limit = 5): PersonalFact[] {
-  const ranked = rankFacts(query, facts);
+export function retrieveFacts(
+  query: string | string[],
+  facts: PersonalFact[],
+  limit = 5,
+  semanticScores: SemanticFactScore[] = [],
+): PersonalFact[] {
+  const hasSemanticScores = semanticScores.length > 0 && shouldUseSemanticRetrieval(query, facts);
+  const ranked = hasSemanticScores ? rankFactsHybrid(query, facts, semanticScores) : rankFacts(query, facts);
   const bestScore = ranked[0]?.score ?? 0;
-  if (bestScore < 1.5) return [];
+  if (bestScore < (hasSemanticScores ? 0.001 : 1.5)) return [];
   const selected: PersonalFact[] = [];
   const blogGroupCounts = new Map<string, number>();
   const resumePageCounts = new Map<string, number>();
   let resumeSourceCount = 0;
+  let oralHistoryCount = 0;
   const queryTerms = (Array.isArray(query) ? query : [query]).map((text) => terms(text));
   const addCandidate = (fact: PersonalFact): boolean => {
     if (selected.some((item) => item.id === fact.id)) return false;
@@ -115,6 +169,10 @@ export function retrieveFacts(query: string | string[], facts: PersonalFact[], l
       const count = blogGroupCounts.get(groupId) ?? 0;
       if (count >= 2) return false;
       blogGroupCounts.set(groupId, count + 1);
+    }
+    if (fact.recordType === "oral_history") {
+      if (oralHistoryCount >= 3) return false;
+      oralHistoryCount += 1;
     }
     if (fact.recordType === "resume_source") {
       if (resumeSourceCount >= 3) return false;
@@ -135,7 +193,9 @@ export function retrieveFacts(query: string | string[], facts: PersonalFact[], l
   }
 
   const bestIndexedScore = ranked.find(({ fact }) => fact.recordType !== "resume_source")?.score ?? 0;
-  const normalThreshold = Math.max(1.5, bestIndexedScore * 0.68);
+  const normalThreshold = hasSemanticScores
+    ? Math.max(0.001, bestIndexedScore * 0.28)
+    : Math.max(1.5, bestIndexedScore * 0.68);
   const resumeBackedSummaries = ranked
     .filter(({ fact, score }) => score >= normalThreshold
       && fact.recordType !== "resume_source"
@@ -155,7 +215,9 @@ export function retrieveFacts(query: string | string[], facts: PersonalFact[], l
     || (b.fact.sourceVersion ?? "").localeCompare(a.fact.sourceVersion ?? "")
     || a.fact.id.localeCompare(b.fact.id));
   const bestResumeSourceScore = sourceCandidates[0]?.score ?? 0;
-  const resumeSourceThreshold = Math.max(5, bestResumeSourceScore * 0.48);
+  const resumeSourceThreshold = hasSemanticScores
+    ? Math.max(0.001, bestResumeSourceScore * 0.48)
+    : Math.max(5, bestResumeSourceScore * 0.48);
   for (const { fact, score } of sourceCandidates) {
     if (score < resumeSourceThreshold) break;
     addCandidate(fact);
@@ -181,6 +243,9 @@ export function factContext(facts: PersonalFact[]): string[] {
         ? `，${fact.dateConfidence === "uncertain" ? "目录推定年份" : "写于"} ${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "（具体日期不确定）" : ""}`
         : "，发布日期未确认";
       return `历史博客片段${date}，仅代表当时的记录或观点：${fact.title}：${fact.body}（来源：${fact.source}）`;
+    }
+    if (fact.recordType === "oral_history") {
+      return `个人口述原文片段（主题：${fact.section ?? fact.title}；保留原始叙述措辞）：\n${fact.body}\n来源：${fact.source}`;
     }
     const label = fact.recordType === "opinion"
       ? "公开观点索引摘要（非逐字引文）"

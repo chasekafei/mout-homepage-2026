@@ -17,6 +17,22 @@ export const config = {
     model: process.env.GPTPROTO_MODEL || "gemini-3.8-flash",
     webSearchTool: process.env.GPTPROTO_WEB_SEARCH_TOOL || "web_search_preview",
   },
+  embeddings: {
+    apiKey: process.env.GPTPROTO_API_KEY || "",
+    baseUrl: process.env.ROLEPLAY_EMBEDDING_BASE_URL
+      || process.env.GPTPROTO_EMBEDDING_BASE_URL
+      || "https://api.gptproto.com/v1",
+    model: process.env.ROLEPLAY_EMBEDDING_MODEL
+      || process.env.GPTPROTO_EMBEDDING_MODEL
+      || "text-embedding-3-large",
+    version: process.env.ROLEPLAY_EMBEDDING_VERSION
+      || process.env.GPTPROTO_EMBEDDING_VERSION
+      || "gptproto-text-embedding-3-large-1024-v1",
+    dimensions: Number(process.env.ROLEPLAY_EMBEDDING_DIMENSIONS || process.env.GPTPROTO_EMBEDDING_DIMENSIONS || 1_024),
+    minSimilarity: Number(process.env.AGENT_EMBEDDING_MIN_SIMILARITY || 0.2),
+    timeoutMs: Number(process.env.AGENT_EMBEDDING_TIMEOUT_MS || 12_000),
+    lexicalConfidenceThreshold: Number(process.env.AGENT_EMBEDDING_LEXICAL_CONFIDENCE_THRESHOLD || 80),
+  },
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY || "",
     baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",

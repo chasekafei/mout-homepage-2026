@@ -39,6 +39,29 @@ DeepSeek 官方 API 作为第二个 provider，通过 `DEFAULT_PROVIDER=deepseek
 
 每次请求还会注入服务端当前时间、`AGENT_TIMEZONE` 指定的 MouT 默认时区、访客浏览器时区、星期、可推导的农历日期和常见节日。中国法定节假日的调休安排不会由模型猜测，只有在联网搜索得到可信来源时才使用。
 
+## 语义检索
+
+知识检索默认将现有中文关键词检索与 GPT Proto embeddings 混合排序，不使用 Neon 向量扩展。向量索引只由博客、简历和口述经历原文片段的标题/章节/正文生成；不会嵌入 `facts.json` 的摘要、标签或摘要派生别名，它们只参与关键词匹配。2026 年简历 HTML、历史简历 PDF 和口述经历由本地原始来源生成片段；每轮至少向量化当前问题，只有短追问时才会在同一 API 请求中加入最近两条访客问题（各截取前 300 字符）。服务端没有加载到与语料 hash、模型版本和维数一致的索引时，或 embedding API 暂不可用时，会继续使用关键词检索。
+
+在本地设置 `GPTPROTO_API_KEY` 后，先从博客、简历和口述经历源文件更新原文片段，再生成静态文档索引：
+
+```bash
+node tools/content/build-agent-blog-corpus.mjs
+node tools/content/build-agent-resume-corpus.mjs
+node tools/content/build-agent-oral-history-corpus.mjs
+node tools/content/build-agent-embedding-index.mjs
+```
+
+默认 embedding 配置为 `text-embedding-3-large`、1024 维和 GPT Proto 兼容 endpoint。可以用 `ROLEPLAY_EMBEDDING_MODEL`、`ROLEPLAY_EMBEDDING_VERSION`、`ROLEPLAY_EMBEDDING_DIMENSIONS`、`ROLEPLAY_EMBEDDING_BASE_URL` 覆盖，或使用对应的 `GPTPROTO_EMBEDDING_*` 变量。生成的 `content/agent-public/embedding-index.json` 与 `embedding-index.f32.gz` 需要随语料部署；更新博客、口述经历或简历原文后重建。添加原文后，先运行 `node tools/content/build-agent-blog-corpus.mjs`、`node tools/content/build-agent-oral-history-corpus.mjs` 或 `node tools/content/build-agent-resume-corpus.mjs` 更新原文片段。
+
+索引生成前可运行查询集查看关键词基线；索引生成后会额外请求测试查询的 embeddings 并比较混合召回：
+
+```bash
+pnpm agent:retrieval-eval
+```
+
+脚本报告 lexical 与 hybrid 的 MRR、Hit@3、Hit@5 和逐条命中排名。部署 Railway 后，`GET /health` 的 `semanticRetrievalEnabled` 和 `semanticRecords` 可用于确认静态索引是否加载并启用。
+
 ## 本地运行
 
 先在 `services/agent-api/.env` 中填写至少一个 provider 的 key：
