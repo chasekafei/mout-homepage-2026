@@ -63,13 +63,43 @@ function parseSseBlock(block: string): ProviderEvent | null {
   }
 }
 
-async function* parseStream(response: Response): AsyncGenerator<ProviderEvent> {
+class UpstreamStreamIdleTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`上游流式响应超过 ${timeoutMs}ms 没有新数据`);
+    this.name = "UpstreamStreamIdleTimeoutError";
+  }
+}
+
+async function readWithIdleTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (timeoutMs <= 0) return reader.read();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      void reader.cancel();
+      reject(new UpstreamStreamIdleTimeoutError(timeoutMs));
+    }, timeoutMs);
+    reader.read().then(
+      (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number): AsyncGenerator<ProviderEvent> {
   if (!response.body) throw new Error("上游没有返回流");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithIdleTimeout(reader, idleTimeoutMs);
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
     const blocks = buffer.split(/\r?\n\r?\n+/);
     buffer = blocks.pop() || "";
@@ -81,14 +111,6 @@ async function* parseStream(response: Response): AsyncGenerator<ProviderEvent> {
   }
   const event = parseSseBlock(buffer);
   if (event) yield event;
-}
-
-function timeoutSignal(ms: number): AbortSignal {
-  return AbortSignal.timeout ? AbortSignal.timeout(ms) : (() => {
-    const controller = new AbortController();
-    setTimeout(() => controller.abort(), ms);
-    return controller.signal;
-  })();
 }
 
 export async function* streamProvider(name: ProviderName, request: ProviderRequest): AsyncGenerator<ProviderEvent> {
@@ -109,20 +131,45 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
       }
     : { model: request.model, messages: asChatMessages(request.messages), stream: true };
 
+  const controller = new AbortController();
+  let headerTimedOut = false;
+  let totalTimedOut = false;
+  const headerTimer = setTimeout(() => {
+    headerTimedOut = true;
+    controller.abort();
+  }, config.upstreamHeaderTimeoutMs);
   let response: Response;
   try {
-    response = await fetch(url, { method: "POST", headers: authHeaders(provider), body: JSON.stringify(body), signal: timeoutSignal(config.upstreamTimeoutMs) });
+    response = await fetch(url, { method: "POST", headers: authHeaders(provider), body: JSON.stringify(body), signal: controller.signal });
   } catch (error) {
-    yield { type: "error", message: error instanceof Error ? error.message : "上游请求失败" };
+    clearTimeout(headerTimer);
+    const message = headerTimedOut
+      ? `上游响应头超时（${config.upstreamHeaderTimeoutMs}ms），GPT Proto 尚未返回响应`
+      : error instanceof Error ? error.message : "上游请求失败";
+    yield { type: "error", message };
     return;
   }
+  clearTimeout(headerTimer);
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     yield { type: "error", message: `上游返回 ${response.status}${detail ? `：${detail.slice(0, 500)}` : ""}` };
     return;
   }
-  yield { type: "status", value: request.useWebSearch ? "searching" : "answering" };
-  yield* parseStream(response);
+  const streamTimer = setTimeout(() => {
+    totalTimedOut = true;
+    controller.abort();
+  }, config.upstreamStreamTimeoutMs);
+  try {
+    yield { type: "status", value: request.useWebSearch ? "searching" : "answering" };
+    yield* parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs);
+  } catch (error) {
+    const message = totalTimedOut
+      ? `上游流式响应总时长超过 ${config.upstreamStreamTimeoutMs}ms`
+      : error instanceof Error ? error.message : "上游流式响应失败";
+    yield { type: "error", message };
+  } finally {
+    clearTimeout(streamTimer);
+  }
 }
 
 export function providerModel(name: ProviderName, requested?: string): string {

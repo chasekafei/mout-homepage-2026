@@ -2,6 +2,10 @@ export type ProviderName = "gptproto" | "deepseek";
 
 const csv = (value: string | undefined, fallback: string[]) =>
   (value ? value.split(",") : fallback).map((item) => item.trim()).filter(Boolean);
+const duration = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 
 export const config = {
   port: Number(process.env.PORT || 8787),
@@ -47,5 +51,8 @@ export const config = {
   embeddingRetryDelayMs: Math.max(0, Number(process.env.AGENT_EMBEDDING_RETRY_DELAY_MS || 250)),
   maxHistoryMessages: 256,
   maxContextFacts: Number(process.env.MAX_CONTEXT_FACTS || 20),
-  upstreamTimeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS || 60_000),
+  upstreamHeaderTimeoutMs: duration(process.env.UPSTREAM_HEADER_TIMEOUT_MS, 15_000),
+  // Keep legacy UPSTREAM_TIMEOUT_MS from silently restoring the old 60s cap.
+  upstreamStreamTimeoutMs: Math.max(180_000, duration(process.env.UPSTREAM_STREAM_TIMEOUT_MS || process.env.UPSTREAM_TIMEOUT_MS, 180_000)),
+  upstreamStreamIdleTimeoutMs: duration(process.env.UPSTREAM_STREAM_IDLE_TIMEOUT_MS, 60_000),
 };
