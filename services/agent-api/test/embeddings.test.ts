@@ -7,6 +7,7 @@ import { gzipSync } from "node:zlib";
 import type { PersonalFact } from "@mout/agent-core";
 import {
   createEmbeddings,
+  createEmbeddingsWithRetry,
   embeddingCorpusHash,
   loadEmbeddingIndex,
   rankSemanticCandidates,
@@ -102,4 +103,27 @@ test("embedding API failures are safe to fall back from", async () => {
     /HTTP 401/,
   );
   await assert.rejects(createEmbeddings(["query"], { ...config, apiKey: "" }), /API key is not configured/);
+});
+
+test("transient embedding failures retry once and then succeed", async () => {
+  let attempts = 0;
+  const vectors = await createEmbeddingsWithRetry(["query"], config, { maxAttempts: 2, retryDelayMs: 0 }, async () => {
+    attempts += 1;
+    if (attempts === 1) throw new TypeError("network reset");
+    return new Response(JSON.stringify({ data: [{ index: 0, embedding: [1, 0, 0] }] }), { status: 200 });
+  });
+  assert.equal(attempts, 2);
+  assert.deepEqual(vectors, [[1, 0, 0]]);
+});
+
+test("embedding authentication failures do not retry", async () => {
+  let attempts = 0;
+  await assert.rejects(
+    createEmbeddingsWithRetry(["query"], config, { maxAttempts: 2, retryDelayMs: 0 }, async () => {
+      attempts += 1;
+      return new Response("invalid key", { status: 401 });
+    }),
+    /HTTP 401/,
+  );
+  assert.equal(attempts, 1);
 });

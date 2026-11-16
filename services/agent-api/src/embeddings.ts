@@ -11,6 +11,7 @@ export type EmbeddingConfig = {
   dimensions: number;
   minSimilarity: number;
   timeoutMs: number;
+  lexicalConfidenceThreshold?: number;
 };
 
 export type EmbeddingIndexManifest = {
@@ -32,6 +33,26 @@ export type WeightedQueryVector = {
   vector: number[];
   weight: number;
 };
+
+export type EmbeddingRetryOptions = {
+  maxAttempts: number;
+  retryDelayMs: number;
+  onAttempt?: (attempt: number) => void;
+  onRetry?: (attempt: number, error: unknown) => void;
+};
+
+export class EmbeddingApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "EmbeddingApiError";
+  }
+}
+
+export function isRetryableEmbeddingError(error: unknown): boolean {
+  if (error instanceof EmbeddingApiError) return [408, 425, 429].includes(error.status) || error.status >= 500;
+  if (!(error instanceof Error)) return false;
+  return ["AbortError", "TimeoutError", "TypeError"].includes(error.name);
+}
 
 export function isOriginalSource(fact: PersonalFact): boolean {
   return fact.visibility === "public"
@@ -81,7 +102,10 @@ export async function createEmbeddings(
     body: JSON.stringify({ model: config.model, input: inputs, dimensions: config.dimensions }),
     signal: AbortSignal.timeout(config.timeoutMs),
   });
-  if (!response.ok) throw new Error(`Embedding API returned HTTP ${response.status}`);
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new EmbeddingApiError(`Embedding API returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`, response.status);
+  }
 
   const payload = await response.json() as { data?: Array<{ index?: number; embedding?: number[] }> };
   if (!Array.isArray(payload.data) || payload.data.length !== inputs.length) {
@@ -93,6 +117,29 @@ export async function createEmbeddings(
     normalizeVector(item.embedding, config.dimensions);
     return item.embedding;
   });
+}
+
+export async function createEmbeddingsWithRetry(
+  inputs: string[],
+  config: EmbeddingConfig,
+  options: EmbeddingRetryOptions,
+  fetcher: typeof fetch = fetch,
+): Promise<number[][]> {
+  const maxAttempts = Math.min(2, Math.max(1, Math.floor(options.maxAttempts)));
+  const retryDelayMs = Math.max(0, options.retryDelayMs);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    options.onAttempt?.(attempt);
+    try {
+      return await createEmbeddings(inputs, config, fetcher);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !isRetryableEmbeddingError(error)) throw error;
+      options.onRetry?.(attempt, error);
+      if (retryDelayMs) await new Promise<void>((resolve) => setTimeout(resolve, retryDelayMs * 2 ** (attempt - 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Embedding request failed");
 }
 
 export async function loadEmbeddingIndex(

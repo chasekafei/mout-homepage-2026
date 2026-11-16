@@ -41,6 +41,10 @@ export const config = {
   maxContextTokens: Number(process.env.MAX_CONTEXT_TOKENS || 128_000),
   contextOutputReserveTokens: Number(process.env.CONTEXT_OUTPUT_RESERVE_TOKENS || 8_192),
   contextSafetyMarginTokens: Number(process.env.CONTEXT_SAFETY_MARGIN_TOKENS || 2_048),
+  // Optional retrieval must not delay the first model token indefinitely.
+  embeddingSoftTimeoutMs: Number(process.env.AGENT_EMBEDDING_SOFT_TIMEOUT_MS || 5_000),
+  embeddingMaxAttempts: Math.min(2, Math.max(1, Number(process.env.AGENT_EMBEDDING_MAX_ATTEMPTS || 2))),
+  embeddingRetryDelayMs: Math.max(0, Number(process.env.AGENT_EMBEDDING_RETRY_DELAY_MS || 250)),
   maxHistoryMessages: 256,
   maxContextFacts: Number(process.env.MAX_CONTEXT_FACTS || 20),
   upstreamTimeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS || 60_000),

@@ -152,6 +152,40 @@ function SourceRow({ source }: { source: AgentSource }) {
   return externalUrl ? <a className="source-row" href={externalUrl} target="_blank" rel="noopener noreferrer nofollow">{content}</a> : <div className="source-row">{content}</div>;
 }
 
+function sourceGroupKey(source: AgentSource): string {
+  if (source.kind === "web") return `web:${source.url ?? source.id}`;
+  return (source.source ?? source.id)
+    .replace(/^历史博客\s*·\s*[^·]+·\s*/u, "")
+    .replace(/（(?:PDF|HTML) 第 \d+ 页）$/u, "")
+    .replace(/#(?:page|sheet)=\d+$/u, "")
+    .trim();
+}
+
+function sourceDisplayTitle(source: AgentSource): string {
+  if (source.kind === "web") return source.title;
+  if (source.title.startsWith("博客：")) return source.title.replace(/\s+\/\s+.*$/u, "");
+  return source.title.replace(/\s+·\s+(?:PDF|HTML) 第 \d+ 页(?:\s+·.*)?$/u, "");
+}
+
+function mergeSources(sources: AgentSource[]): AgentSource[] {
+  const grouped = new Map<string, AgentSource>();
+  for (const source of sources) {
+    const key = sourceGroupKey(source);
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, {
+        ...source,
+        id: `source-group:${key}`,
+        title: sourceDisplayTitle(source),
+        source: key.startsWith("web:") ? source.source : key,
+      });
+      continue;
+    }
+    if (current.kind !== "project" && source.kind === "project") grouped.set(key, { ...current, ...source, id: current.id, title: sourceDisplayTitle(source), source: key });
+  }
+  return [...grouped.values()];
+}
+
 function AssistantMark({ small = false }: { small?: boolean }) {
   return <span className={`assistant-mark ${small ? "assistant-mark-small" : ""}`}><img src="/avatar-pixel.png" alt="" className="pixel" />{!small && <i />}</span>;
 }
@@ -188,12 +222,12 @@ export function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [searching, setSearching] = useState(false);
   const conversationSources = useMemo(() => {
-    const byId = new Map<string, AgentSource>();
+    const sources: AgentSource[] = [];
     for (const message of messages) {
       if (message.role !== "assistant") continue;
-      for (const source of message.sources ?? []) byId.set(source.id, source);
+      sources.push(...(message.sources ?? []));
     }
-    return [...byId.values()];
+    return mergeSources(sources);
   }, [messages]);
   const [archiveWarning, setArchiveWarning] = useState("");
   const [error, setError] = useState("");
@@ -416,8 +450,8 @@ export function App() {
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
                       {message.role === "assistant" && message.pending && message.content && <span className="stream-caret" />}
                       {message.role === "assistant" && !!message.sources?.length && <div className="message-sources">
-                        <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />本轮检索资料 {message.sources.length}</button>
-                        <div className="project-source-list">{message.sources.filter((source) => source.kind === "project" && source.project).map((source) => <ProjectSource key={source.id} source={source} />)}</div>
+                        <button className="inline-sources" type="button" onClick={() => setShowContext(true)}><Icon name="book" size={14} />本轮检索资料 {mergeSources(message.sources).length}</button>
+                        <div className="project-source-list">{mergeSources(message.sources).filter((source) => source.kind === "project" && source.project).map((source) => <ProjectSource key={source.id} source={source} />)}</div>
                       </div>}
                       {message.role === "assistant" && message.contactPrompt && <div className="contact-prompt"><span>想继续聊工作或合作？</span><a href="mailto:hello@mout.me?subject=%E6%9D%A5%E8%87%AA%20MouT.me%20AI%20%E5%88%86%E8%BA%AB">联系 MouT<Icon name="external" size={14} /></a></div>}
                     </div>

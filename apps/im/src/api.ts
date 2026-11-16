@@ -43,6 +43,7 @@ type ChatRequest = {
 
 const API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
 const MOCK = import.meta.env.VITE_AGENT_MOCK !== "false" && !API_URL;
+const CHAT_TIMEOUT_MS = 75_000;
 let warmupPromise: Promise<void> | null = null;
 
 export async function warmAgentBackend() {
@@ -165,31 +166,50 @@ export async function streamChat(request: ChatRequest, onEvent: (event: AgentEve
     request.messages.slice(0, lastUserIndex >= 0 ? lastUserIndex : request.messages.length).map(({ role, content }) => ({ role, content })),
     116_000,
   );
-  const response = await fetch(`${API_URL}/v1/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ conversationId: request.conversationId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: request.mode === "current" ? "casual" : "about", source: request.source }),
-    signal,
-  });
-  if (!response.ok) throw new Error(`Agent API ${response.status}`);
-  if (!response.body) throw new Error("Agent API 没有返回流");
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const event = parseEventLine(line.trim());
-      if (event) onEvent(event);
-    }
-    if (done) break;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, CHAT_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) abortFromCaller();
+    else signal.addEventListener("abort", abortFromCaller, { once: true });
   }
-  const last = parseEventLine(buffer.trim());
-  if (last) onEvent(last);
+  try {
+    const response = await fetch(`${API_URL}/v1/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ conversationId: request.conversationId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: request.mode === "current" ? "casual" : "about", source: request.source }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Agent API ${response.status}`);
+    if (!response.body) throw new Error("Agent API 没有返回流");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const event = parseEventLine(line.trim());
+        if (event) onEvent(event);
+      }
+      if (done) break;
+    }
+    const last = parseEventLine(buffer.trim());
+    if (last) onEvent(last);
+  } catch (error) {
+    if (timedOut) throw new Error("Agent 请求超时，请稍后重试");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 export const isMockMode = MOCK;

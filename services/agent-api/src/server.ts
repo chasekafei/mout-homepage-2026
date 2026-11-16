@@ -20,7 +20,7 @@ import {
 } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
 import { providerModel, sseEvent, streamProvider } from "./provider.js";
-import { createEmbeddings, loadEmbeddingIndex, rankSemanticCandidates, type EmbeddingIndex } from "./embeddings.js";
+import { createEmbeddingsWithRetry, loadEmbeddingIndex, rankSemanticCandidates, type EmbeddingIndex } from "./embeddings.js";
 import {
   archiveEnabled,
   beginArchiveTurn,
@@ -153,6 +153,19 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     input.message,
     ...(input.history ?? []).filter((message) => message.role === "user").slice(-2).map((message) => message.content),
   ];
+  const semanticCandidate = Boolean(
+    embeddingIndex
+      && config.embeddings.apiKey
+      && shouldUseSemanticRetrieval(retrievalQueries, facts, config.embeddings.lexicalConfidenceThreshold),
+  );
+  const requestId = randomUUID();
+  const requestStartedAt = Date.now();
+  const elapsed = () => `${Date.now() - requestStartedAt}ms`;
+  const logPrefix = `[chat ${requestId.slice(0, 8)} conv=${conversationId.slice(0, 8)}]`;
+  console.info(`${logPrefix} start provider=${provider} model=${model} semantic=${semanticCandidate} webSearch=${search} history=${input.history?.length ?? 0}`);
+  res.on("close", () => {
+    if (!res.writableEnded) console.warn(`${logPrefix} client disconnected after ${elapsed()}`);
+  });
   res.statusCode = 200;
   res.setHeader("X-Conversation-Id", conversationId);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -164,28 +177,51 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   res.socket?.setNoDelay(true);
   res.flushHeaders?.();
   res.write(`: stream-open${" ".repeat(2048)}\n\n`);
+  // The client reserves "searching" for an actual web search. Semantic
+  // retrieval stays invisible in that label and falls back quietly if needed.
   res.write(sseEvent({ type: "status", value: search ? "searching" : "answering" }));
 
   let semanticScores: SemanticFactScore[] = [];
-  if (embeddingIndex && config.embeddings.apiKey
-    && shouldUseSemanticRetrieval(retrievalQueries, facts, config.embeddings.lexicalConfidenceThreshold)) {
+  if (semanticCandidate && embeddingIndex) {
+    const embeddingStartedAt = Date.now();
+    const embeddingTimeoutMs = Math.min(config.embeddings.timeoutMs, config.embeddingSoftTimeoutMs);
+    console.info(`${logPrefix} embedding start inputs=1 timeout=${embeddingTimeoutMs}ms maxAttempts=${config.embeddingMaxAttempts}`);
     try {
-      const semanticQueries = input.message.length < 100
-        ? [input.message, ...(retrievalQueries.slice(1, 3).map((query) => query.slice(0, 300)))]
-        : [input.message];
-      const queryTexts = semanticQueries.map((query) => query.slice(0, 4_000));
-      const vectors = await createEmbeddings(queryTexts, config.embeddings);
+      // One request keeps short follow-ups grounded in their immediate context
+      // without paying for three separately weighted embedding vectors.
+      const previousUserQuery = [...(input.history ?? [])]
+        .reverse()
+        .find((message) => message.role === "user")?.content;
+      const semanticQuery = input.message.length < 100 && previousUserQuery
+        ? `上一句：${previousUserQuery.slice(0, 300)}\n当前问题：${input.message.slice(0, 4_000)}`
+        : input.message.slice(0, 4_000);
+      const vectors = await createEmbeddingsWithRetry(
+        [semanticQuery],
+        { ...config.embeddings, timeoutMs: embeddingTimeoutMs },
+        {
+          maxAttempts: config.embeddingMaxAttempts,
+          retryDelayMs: config.embeddingRetryDelayMs,
+          onAttempt: (attempt) => console.info(`${logPrefix} embedding attempt=${attempt}`),
+          onRetry: (attempt, error) => {
+            const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+            console.warn(`${logPrefix} embedding retry after attempt=${attempt} error=${detail} delay=${config.embeddingRetryDelayMs * 2 ** (attempt - 1)}ms`);
+          },
+        },
+      );
       semanticScores = rankSemanticCandidates(
-        vectors.map((vector, index) => ({ vector, weight: index === 0 ? 1 : index === 1 ? 0.65 : 0.4 })),
+        vectors.map((vector) => ({ vector, weight: 1 })),
         embeddingIndex,
         24,
         config.embeddings.minSimilarity,
       );
+      console.info(`${logPrefix} embedding complete duration=${Date.now() - embeddingStartedAt}ms candidates=${semanticScores.length}`);
     } catch (error) {
-      console.warn("Semantic retrieval unavailable; using lexical retrieval", error instanceof Error ? error.message : "EmbeddingError");
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.warn(`${logPrefix} embedding failed duration=${Date.now() - embeddingStartedAt}ms error=${detail}; fallback=lexical`);
     }
   }
   const selectedFacts = retrieveFacts(retrievalQueries, facts, config.maxContextFacts, semanticScores);
+  console.info(`${logPrefix} retrieval complete duration=${elapsed()} facts=${selectedFacts.length} semanticCandidates=${semanticScores.length}`);
   const runtimeContext = buildRuntimeContext(new Date(), config.timeZone, input.timezone);
   const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext);
   const currentMessageTokens = estimateTextTokens(input.message) + 8;
@@ -253,22 +289,31 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   let answer = "";
   let citations: Array<{ title: string; url: string }> = [];
   let answerStatus: "complete" | "error" = "complete";
+  const providerStartedAt = Date.now();
+  console.info(`${logPrefix} provider start promptChars=${messages.reduce((total, message) => total + message.content.length, 0)}`);
   try {
     for await (const event of streamProvider(provider, { messages, model, stream: true, useWebSearch: search })) {
       if (event.type === "delta") answer += event.text;
       if (event.type === "citation") citations = [...citations, { title: event.title, url: event.url }];
-      if (event.type === "error") answerStatus = "error";
+      if (event.type === "error") {
+        answerStatus = "error";
+        console.error(`${logPrefix} provider error after ${Date.now() - providerStartedAt}ms: ${event.message}`);
+      }
       if (!res.destroyed && !res.writableEnded) res.write(sseEvent(event));
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
   } catch (error) {
     answerStatus = "error";
     const message = error instanceof Error ? error.message : "上游请求失败";
+    console.error(`${logPrefix} provider exception after ${Date.now() - providerStartedAt}ms: ${message}`);
     if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "error", message }));
   }
   if (!answer.trim()) answerStatus = "error";
+  console.info(`${logPrefix} provider complete duration=${Date.now() - providerStartedAt}ms status=${answerStatus} answerChars=${answer.length} total=${elapsed()}`);
 
+  const archiveWaitStartedAt = Date.now();
   const archiveTurn = await archiveTurnPromise;
+  if (archiveEnabled()) console.info(`${logPrefix} archive ready duration=${Date.now() - archiveWaitStartedAt}ms created=${Boolean(archiveTurn)}`);
   if (archiveTurn) {
     try {
       await completeArchiveTurn({
@@ -289,6 +334,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     }
   }
   res.end();
+  console.info(`${logPrefix} complete total=${elapsed()}`);
 }
 
 async function handleAdminLogin(req: IncomingMessage, res: ServerResponse) {
