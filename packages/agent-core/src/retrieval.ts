@@ -161,10 +161,13 @@ export function retrieveFacts(
   let resumeSourceCount = 0;
   let oralHistoryCount = 0;
   const selfIntroduction = isSelfIntroductionQuery(query);
+  const resumeSourceLimit = selfIntroduction ? 10 : 3;
+  const oralHistoryLimit = selfIntroduction ? 6 : 3;
   const queryTerms = (Array.isArray(query) ? query : [query]).map((text) => terms(text));
   const addCandidate = (fact: PersonalFact): boolean => {
     if (selected.some((item) => item.id === fact.id)) return false;
     if (selfIntroduction && fact.recordType === "resume_source" && fact.sourceVersion !== "2026") return false;
+    if (selfIntroduction && fact.recordType === "blog") return false;
     if (fact.sensitivity === "personal") {
       const explicitTerms = new Set([...terms(fact.title), ...terms(fact.keywords?.join(" ") ?? "")]);
       const explicitlyRequested = queryTerms[0]?.size
@@ -174,18 +177,18 @@ export function retrieveFacts(
     if (fact.recordType === "blog") {
       const groupId = fact.groupId ?? fact.id;
       const count = blogGroupCounts.get(groupId) ?? 0;
-      if (count >= 2) return false;
+      if (count >= (selfIntroduction ? 3 : 2)) return false;
       blogGroupCounts.set(groupId, count + 1);
     }
     if (fact.recordType === "oral_history") {
-      if (oralHistoryCount >= 3) return false;
+      if (oralHistoryCount >= oralHistoryLimit) return false;
       oralHistoryCount += 1;
     }
     if (fact.recordType === "resume_source") {
-      if (resumeSourceCount >= 3) return false;
+      if (resumeSourceCount >= resumeSourceLimit) return false;
       const groupId = fact.groupId ?? fact.id;
       const count = resumePageCounts.get(groupId) ?? 0;
-      if (count >= 2) return false;
+      if (count >= (selfIntroduction ? 3 : 2)) return false;
       resumePageCounts.set(groupId, count + 1);
       resumeSourceCount += 1;
     }
@@ -211,7 +214,24 @@ export function retrieveFacts(
       });
     for (const fact of currentResume) {
       addCandidate(fact);
-      if (selected.length >= Math.min(limit, 6)) break;
+      if (selected.length >= Math.min(limit, 10)) break;
+    }
+    const currentOralHistory = facts
+      .filter((fact) => fact.recordType === "oral_history")
+      .filter((fact) => /Super Intern|TIYA|超参数|AI 产品|Agent|语音社交|游戏 AI|产品探索/u.test(`${fact.body} ${fact.keywords?.join(" ") ?? ""}`))
+      .sort((a, b) => {
+        const priority = (fact: PersonalFact) => {
+          const text = `${fact.body} ${fact.keywords?.join(" ") ?? ""}`;
+          if (/Super Intern/u.test(text)) return 0;
+          if (/TIYA|语音社交/u.test(text)) return 1;
+          if (/超参数|AI 产品|Agent/u.test(text)) return 2;
+          return 3;
+        };
+        return priority(a) - priority(b) || a.id.localeCompare(b.id);
+      });
+    for (const fact of currentOralHistory) {
+      addCandidate(fact);
+      if (selected.length >= Math.min(limit, 16)) break;
     }
     for (const fact of facts.filter((item) => ["identity", "ai-portfolio-overview"].includes(item.id))) {
       addCandidate(fact);
