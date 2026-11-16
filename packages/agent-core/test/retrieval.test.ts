@@ -27,6 +27,12 @@ test("Chinese paraphrases retrieve the intended personal fact", () => {
   for (const query of ["你做过什么产品", "你做过哪些 AI 产品？", "你做过什么 AI 项目", "你做过哪些应用", "AI Agent 经历", "你从什么时候开始玩游戏"]) {
     assert.ok(retrieveFacts(query, corpus).some((fact) => fact.recordType === "resume_source" || fact.recordType === "oral_history"), query);
   }
+
+  const selfIntroduction = retrieveFacts("你可以简单介绍一下自己吗？", corpus, 8);
+  assert.ok(selfIntroduction.some((fact) => fact.id === "resume-2026-html-01"));
+  assert.ok(selfIntroduction.some((fact) => fact.id === "resume-2026-html-02"));
+  assert.ok(selfIntroduction.some((fact) => fact.id === "resume-2026-html-03"));
+  assert.ok(selfIntroduction.every((fact) => fact.sourceVersion !== "2024" && fact.sourceVersion !== "2021"));
 });
 
 test("latest resume dates win without guessing current employment", () => {

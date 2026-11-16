@@ -34,6 +34,11 @@ export type RankedFact = { fact: PersonalFact; score: number };
 export type SemanticFactScore = { id: string; score: number };
 export const DEFAULT_SEMANTIC_LEXICAL_CONFIDENCE = 80;
 
+function isSelfIntroductionQuery(query: string | string[]): boolean {
+  const text = (Array.isArray(query) ? query[0] : query).toLocaleLowerCase("zh-CN");
+  return /(介绍一下自己|简单介绍|自我介绍|你是谁|你平时做什么|你的个人简介|你的职业经历|你的工作经历|about yourself|introduce yourself)/iu.test(text);
+}
+
 /** Lexical retrieval with Chinese n-grams, curated aliases, field weighting, and term rarity. */
 export function rankFacts(query: string | string[], facts: PersonalFact[]): RankedFact[] {
   const queries = (Array.isArray(query) ? query : [query])
@@ -155,9 +160,11 @@ export function retrieveFacts(
   const resumePageCounts = new Map<string, number>();
   let resumeSourceCount = 0;
   let oralHistoryCount = 0;
+  const selfIntroduction = isSelfIntroductionQuery(query);
   const queryTerms = (Array.isArray(query) ? query : [query]).map((text) => terms(text));
   const addCandidate = (fact: PersonalFact): boolean => {
     if (selected.some((item) => item.id === fact.id)) return false;
+    if (selfIntroduction && fact.recordType === "resume_source" && fact.sourceVersion !== "2026") return false;
     if (fact.sensitivity === "personal") {
       const explicitTerms = new Set([...terms(fact.title), ...terms(fact.keywords?.join(" ") ?? "")]);
       const explicitlyRequested = queryTerms[0]?.size
@@ -185,6 +192,32 @@ export function retrieveFacts(
     selected.push(fact);
     return true;
   };
+
+  if (selfIntroduction) {
+    const currentResume = facts
+      .filter((fact) => fact.recordType === "resume_source" && fact.sourceVersion === "2026")
+      .sort((a, b) => {
+        const priority = (fact: PersonalFact) => {
+          const title = fact.title;
+          if (/个人简介|能力/u.test(title)) return 0;
+          if (/AMMO AI/u.test(title)) return 1;
+          if (/Super Intern/u.test(title)) return 2;
+          if (/Fakers/u.test(title)) return 3;
+          if (/Ammonad/u.test(title)) return 4;
+          if (/超参数/u.test(title)) return 5;
+          return 6;
+        };
+        return priority(a) - priority(b) || a.id.localeCompare(b.id);
+      });
+    for (const fact of currentResume) {
+      addCandidate(fact);
+      if (selected.length >= Math.min(limit, 6)) break;
+    }
+    for (const fact of facts.filter((item) => ["identity", "ai-portfolio-overview"].includes(item.id))) {
+      addCandidate(fact);
+      if (selected.length >= limit) break;
+    }
+  }
 
   const resumeSourceScores = new Map<string, { fact: PersonalFact; score: number }>();
   for (const { fact, score } of ranked) {
