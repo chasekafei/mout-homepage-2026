@@ -75,7 +75,7 @@ test("oral-history retrieval uses and exposes the original source passage", () =
   assert.equal(source.recordType, "oral_history");
   assert.ok(source.body.includes("客户"));
   assert.ok(factContext([source]).join("\n").includes(source.body));
-  assert.match(factContext([source]).join("\n"), /个人口述原文片段/);
+  assert.match(factContext([source]).join("\n"), /记忆·我的经历·原话/);
   assert.equal(retrieveFacts("政府客户需要什么、我们能做到什么程度", corpus).some((fact) => fact.id === source.id), true);
 });
 
@@ -130,7 +130,8 @@ test("resume-backed answers retrieve exact excerpts and keep the 2026 wording", 
   assert.ok((original.page ?? 0) > 0);
   assert.ok(original.body.includes("吸引用户创建专业领域 Skill 上千个"));
   assert.ok(factContext([original]).join("\n").includes(original.body));
-  assert.match(factContext([original]).join("\n"), /简历原文摘录/);
+  assert.match(factContext([original]).join("\n"), /记忆·我的经历·原文/);
+  assert.doesNotMatch(factContext([original]).join("\n"), /PDF|HTML|来源|2026/);
   assert.ok(hasVerbatimResumeQuote("简历写道：“吸引用户创建专业领域 Skill 上千个”", [original]));
   assert.equal(hasVerbatimResumeQuote("简历写道：“用户创建了数千 Skills”", [original]), false);
   assert.equal(hasVerbatimResumeQuote("用户做了很多 Skill。", [original]), false);
@@ -159,9 +160,14 @@ test("resume source rules prohibit paraphrasing index summaries as quotations", 
     resumes.find((fact) => fact.sourceVersion === "2026") as PersonalFact,
     corpus.find((fact) => fact.id === "super-intern-results") as PersonalFact,
   ]));
-  assert.match(prompt, /口述原文和简历原文是个人经历与项目细节的主要依据/);
-  assert.match(prompt, /facts\.json 中的整理摘要可辅助定位主题或补充次级背景/);
-  assert.match(prompt, /必须用引号逐字引用检索到的原句/);
+  assert.match(prompt, /口述经历和简历原文是我的个人经历与项目细节/);
+  assert.match(prompt, /始终使用第一人称/);
+  assert.match(prompt, /不要对外提到/);
+  assert.match(prompt, /不要向访客解释这些记忆来自哪里/);
+  assert.match(prompt, /逐字引用对应记忆中的句子/);
+  const summaryMemory = factContext([corpus.find((fact) => fact.id === "super-intern-results") as PersonalFact]).join("\n");
+  assert.doesNotMatch(summaryMemory, /2026 年简历记载|旧版简历|来源：|根据资料/);
+  assert.match(summaryMemory, /我/);
 });
 
 test("sensitive personal blog material needs an explicit matching query", () => {
@@ -195,10 +201,10 @@ test("blog context identifies historical material and its date", () => {
     visibility: "public",
   };
   const [context] = factContext([blogFact]);
-  assert.match(context, /历史博客片段/);
+  assert.match(context, /记忆·我曾经形成的观点/);
   assert.match(context, /2012/);
-  assert.match(context, /具体日期不确定/);
-  assert.match(context, /仅代表当时/);
+  assert.match(context, /日期不确定/);
+  assert.doesNotMatch(context, /来源|ref\/Blog|PDF/);
 });
 
 test("imported blogs preserve source dates and retrieve contemporary aliases", () => {

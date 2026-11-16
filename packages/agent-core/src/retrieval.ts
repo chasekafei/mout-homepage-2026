@@ -233,24 +233,33 @@ export function retrieveFacts(
 }
 
 export function factContext(facts: PersonalFact[]): string[] {
+  const summaryAsMemory = (value: string) => value
+    .replace(/(?:根据|按|来自)?\s*(?:2026|2024|2021)\s*年(?:\s*\d{1,2}\s*月)?\s*(?:版)?\s*简历(?:中)?\s*(?:记载|写到|提到|称|自述)?[，：:、]?/gu, "")
+    .replace(/(?:旧版|早期)简历(?:中)?(?:记载|写到|提到|称|自述)?[，：:、]?/gu, "")
+    .replace(/(?:项目|这些|相关)?数据(?:来自|源自)(?:简历|旧版简历|资料)[，：:、]?/gu, "")
+    .replace(/资料没有说明/gu, "我没有公开说明")
+    .replace(/闫宇琨/gu, "我")
+    .replace(/本人/gu, "我")
+    .replace(/\s{2,}/gu, " ")
+    .trim();
+
   return facts.map((fact) => {
     if (fact.recordType === "resume_source") {
-      const location = fact.sourceFormat === "html" ? `HTML 第 ${fact.page} 页` : `PDF 第 ${fact.page} 页`;
-      return `简历原文摘录（${fact.sourceVersion} 版，${location}，${fact.section ?? fact.title}；涉及简历经历时必须保留原句措辞）：\n${fact.title}\n${fact.body}\n来源：${fact.source}`;
+      return `记忆·我的经历·原文：\n${fact.title}\n${fact.body}`;
     }
     if (fact.recordType === "blog") {
       const date = fact.publishedAt
-        ? `，${fact.dateConfidence === "uncertain" ? "目录推定年份" : "写于"} ${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "（具体日期不确定）" : ""}`
-        : "，发布日期未确认";
-      return `历史博客片段${date}，仅代表当时的记录或观点：${fact.title}：${fact.body}（来源：${fact.source}）`;
+        ? `·${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "·日期不确定" : ""}`
+        : "";
+      return `记忆·我曾经形成的观点${date}：${fact.title}\n${fact.body}`;
     }
     if (fact.recordType === "oral_history") {
-      return `个人口述原文片段（主题：${fact.section ?? fact.title}；保留原始叙述措辞）：\n${fact.body}\n来源：${fact.source}`;
+      return `记忆·我的经历·原话：\n${fact.body}`;
     }
     const label = fact.recordType === "opinion"
-      ? "公开观点索引摘要（非逐字引文）"
-      : "个人资料索引摘要（非简历原文，不可作为简历措辞引用）";
-    return `${label}：${fact.title}：${fact.body}（来源：${fact.source}）`;
+      ? "记忆·我的观点"
+      : "记忆·我的背景";
+    return `${label}：${fact.title}\n${summaryAsMemory(fact.body)}`;
   });
 }
 
