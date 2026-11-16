@@ -25,7 +25,7 @@ API 会把 `facts.json`、`blog.json`、`resume-source.json` 和 `oral-history.j
 
 `project` 可选，仅用于在回答后展示站内项目卡片。`href` 和可选的 `image` 必须是确实存在的站内路径。
 
-`facts.json` 的 `body` 是索引摘要，不是简历原文。涉及履历、职责或业绩的回答必须引用 `resume-source.json` 中的原句；2026 版优先，引用早期版本时注明年份。不要从不同版本拼接一条引文。
+`facts.json` 的 `body` 是索引摘要，不是简历原文。涉及履历、职责或业绩时，模型优先参考 `resume-source.json` 的原文并用自然的第一人称回答；只有访客明确要求原句或出处时，才引用相关原文。2026 版在内部优先于旧版，聊天时不要主动解释版本来源。
 
 向量索引只使用博客、简历和口述经历原文记录，不嵌入 `facts.json` 的摘要正文；摘要中的关键词和问法仍供关键词检索使用。
 
@@ -37,7 +37,7 @@ API 会把 `facts.json`、`blog.json`、`resume-source.json` 和 `oral-history.j
 node tools/content/build-agent-resume-corpus.mjs
 ```
 
-若 `pdftotext` 不在 `PATH`，通过 `PDFTOTEXT_BIN` 指定它的完整路径。生成器保留各来源的正文措辞和页码，仅规范历史 PDF 文本层中的汉字兼容字形、拆分长段落并移除电话、邮箱、QQ/WeChat 账号及链接。HTML 抽取忽略 CSS、注释、打印按钮和链接属性，只读可见的简历区块。简历原文进入回答前会校验引文是否逐字存在于检索片段；若校验失败，API 会改为返回该片段原文。为完成校验，简历来源回答会在检查通过后再开始输出。运行服务时只需要生成后的 `resume-source.json`，不依赖 Poppler。原始简历、HTML、Prompt 和博客源文件保存在本地，不需要提交；更新源文件后提交生成的语料 JSON 即可。
+若 `pdftotext` 不在 `PATH`，通过 `PDFTOTEXT_BIN` 指定它的完整路径。生成器保留各来源的正文措辞和页码，仅规范历史 PDF 文本层中的汉字兼容字形、拆分长段落并移除电话、邮箱、QQ/WeChat 账号及链接。HTML 抽取忽略 CSS、注释、打印按钮和链接属性，只读可见的简历区块。原始简历、HTML、Prompt 和博客源文件保存在本地，不需要提交；更新源文件后提交生成的语料 JSON 即可。
 
 ## 更新口述经历原文
 

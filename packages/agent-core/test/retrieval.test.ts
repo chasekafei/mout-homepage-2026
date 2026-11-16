@@ -6,7 +6,6 @@ import resumes from "../../../content/agent-public/resume-source.json" with { ty
 import oralHistory from "../../../content/agent-public/oral-history.json" with { type: "json" };
 import semanticEval from "./semantic-retrieval-eval.json" with { type: "json" };
 import { buildSystemPrompt } from "../src/persona.js";
-import { fallbackResumeQuote, hasVerbatimResumeQuote } from "../src/resume-quotes.js";
 import { estimateTextTokens, factContext, rankFactsHybrid, retrieveFacts, selectHistoryWithinBudget } from "../src/retrieval.js";
 import type { ChatMessage, PersonalFact } from "../src/types.js";
 
@@ -132,10 +131,6 @@ test("resume-backed answers retrieve exact excerpts and keep the 2026 wording", 
   assert.ok(factContext([original]).join("\n").includes(original.body));
   assert.match(factContext([original]).join("\n"), /记忆·我的经历·原文/);
   assert.doesNotMatch(factContext([original]).join("\n"), /PDF|HTML|来源|2026/);
-  assert.ok(hasVerbatimResumeQuote("简历写道：“吸引用户创建专业领域 Skill 上千个”", [original]));
-  assert.equal(hasVerbatimResumeQuote("简历写道：“用户创建了数千 Skills”", [original]), false);
-  assert.equal(hasVerbatimResumeQuote("用户做了很多 Skill。", [original]), false);
-  assert.ok(fallbackResumeQuote(original).includes(original.body));
 
   const vtuberQuestion = retrieveFacts("你做过 AI 主播吗", corpus);
   assert.ok(vtuberQuestion.some((fact) => fact.recordType === "resume_source"
@@ -145,7 +140,6 @@ test("resume-backed answers retrieve exact excerpts and keep the 2026 wording", 
   const fakers = resumes.find((fact) => fact.sourceFormat === "html" && fact.title.startsWith("Fakers"));
   assert.ok(fakers?.body.includes("通过 Multi-Agent 与人类互动、追问和反馈"));
   assert.ok(fakers?.body.includes("高情感关联的 AI Buddy"));
-  assert.match(fallbackResumeQuote(fakers as PersonalFact), /HTML 第 1 页/);
 
   const allResumeText = resumes.map((fact) => fact.body).join("\n");
   assert.doesNotMatch(allResumeText, /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u);
