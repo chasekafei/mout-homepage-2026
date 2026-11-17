@@ -221,6 +221,7 @@ export function App() {
   const [mode, setMode] = useState<AgentMode>(() => activeConversation?.mode ?? "profile");
   const [isStreaming, setIsStreaming] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [reading, setReading] = useState(false);
   const conversationSources = useMemo(() => {
     const sources: AgentSource[] = [];
     for (const message of messages) {
@@ -230,6 +231,7 @@ export function App() {
     return mergeSources(sources);
   }, [messages]);
   const [archiveWarning, setArchiveWarning] = useState("");
+  const [toolWarning, setToolWarning] = useState("");
   const [error, setError] = useState("");
   const [showContext, setShowContext] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -300,7 +302,7 @@ export function App() {
     if (!followPageBottom.current || messages.length === 0) return;
     const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" }));
     return () => cancelAnimationFrame(frame);
-  }, [messages, searching]);
+  }, [messages, searching, reading]);
 
   const changeMode = (nextMode: AgentMode) => {
     if (isStreaming) return;
@@ -318,6 +320,8 @@ export function App() {
     setMode("profile");
     setError("");
     setSearching(false);
+    setReading(false);
+    setToolWarning("");
     setShowContext(false);
     setShowHistory(false);
     inputRef.current?.focus();
@@ -334,6 +338,8 @@ export function App() {
     setMode(conversation.mode);
     setError("");
     setSearching(false);
+    setReading(false);
+    setToolWarning("");
     setShowContext(false);
     setShowHistory(false);
   };
@@ -348,14 +354,32 @@ export function App() {
     const next = [...messages, user, assistant];
     setMessages(next);
     setArchiveWarning("");
+    setToolWarning("");
     setShowContext(false);
     setSearching(false);
+    setReading(false);
     setIsStreaming(true);
     const reveal = createTextReveal(setMessages, assistant.id);
     try {
-      const requestMessages = next.filter((message) => !message.pending).map(({ role, content: text }) => ({ role, content: text }));
+      const requestMessages = next.filter((message) => !message.pending).map(({ role, content: text, deepseekToolCalls }) => ({
+        role, content: text, ...(role === "assistant" && deepseekToolCalls ? { deepseekToolCalls } : {}),
+      }));
       await streamChat({ conversationId: conversationState.activeId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im" }, (event: AgentEvent) => {
-        if (event.type === "meta") setSearching(Boolean(event.searching));
+        if (event.type === "meta") {
+          setSearching(Boolean(event.searching));
+          setReading(Boolean(event.reading));
+          if (event.searching || event.reading) setShowContext(true);
+        }
+        if (event.type === "provider_context") {
+          setMessages((current) => current.map((message) => message.id === assistant.id
+            ? { ...message, deepseekToolCalls: event.deepseekToolCalls }
+            : message));
+        }
+        if (event.type === "tool_error") {
+          setToolWarning(event.tool === "deepseek_read_url"
+            ? "网页暂时无法读取，这次回答可能缺少该网页的信息。"
+            : "搜索暂时不可用，最新信息可能不完整。");
+        }
         if (event.type === "source") {
           setMessages((current) => current.map((message) => message.id === assistant.id
             ? { ...message, sources: [...(message.sources ?? []).filter((source) => source.id !== event.source.id), event.source] }
@@ -374,11 +398,14 @@ export function App() {
         }
         if (event.type === "archive_warning") setArchiveWarning(event.message);
         if (event.type === "delta") {
+          setSearching(false);
+          setReading(false);
           reveal.push(event.text);
         }
         if (event.type === "done") {
           void reveal.finish();
           setSearching(false);
+          setReading(false);
         }
         if (event.type === "error") {
           setError(event.message);
@@ -392,6 +419,7 @@ export function App() {
     } finally {
       setIsStreaming(false);
       setSearching(false);
+      setReading(false);
     }
   };
 
@@ -401,7 +429,16 @@ export function App() {
       event.preventDefault(); void send();
     }
   };
-  const clear = () => { if (isStreaming) return; setMessages([]); setShowContext(false); setError(""); inputRef.current?.focus(); };
+  const clear = () => {
+    if (isStreaming) return;
+    setMessages([]);
+    setShowContext(false);
+    setError("");
+    setToolWarning("");
+    setSearching(false);
+    setReading(false);
+    inputRef.current?.focus();
+  };
 
   return (
     <div className="im-app">
@@ -446,7 +483,7 @@ export function App() {
                     <div className="message-body">
                       <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>
                       {message.role === "assistant" && message.pending && !message.content
-                        ? searching ? <div className="searching-state"><span className="searching-pulse" /><span>正在查找知识库</span></div> : <div className="thinking-state">i 人组织语言中<span className="thinking-dots" aria-hidden>···</span></div>
+                        ? searching || reading ? <div className="searching-state"><span className="searching-pulse" /><span>{reading ? "正在阅读网页" : "正在查找公开资料"}</span></div> : <div className="thinking-state">i 人组织语言中<span className="thinking-dots" aria-hidden>···</span></div>
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
                       {message.role === "assistant" && message.pending && message.content && <span className="stream-caret" />}
                       {message.role === "assistant" && !!message.sources?.length && <div className="message-sources">
@@ -458,6 +495,7 @@ export function App() {
                   </article>
                 ))}
                 {archiveWarning && <p className="archive-warning" role="status">{archiveWarning}</p>}
+                {toolWarning && <p className="archive-warning" role="status">{toolWarning}</p>}
                 {error && <div className="error-note"><span>连接中断</span>{error}<button type="button" onClick={() => void send(messages.at(-2)?.content ?? "")}>重试</button></div>}
               </div>
             )}
@@ -475,7 +513,7 @@ export function App() {
 
         <aside className={`context-rail ${showContext ? "is-open" : ""}`} aria-label="回答来源">
           <div className="context-header"><div><span className="eyebrow">CONTEXT</span><h2>当前对话资料</h2></div><button type="button" onClick={() => setShowContext(false)} aria-label="关闭来源面板"><Icon name="close" size={18} /></button></div>
-          {searching ? <div className="context-searching"><span className="search-ring" /><strong>正在查找最新信息</strong><p>只在问题需要时连接公开网络。</p></div> : conversationSources.length > 0 ? <><p className="context-lede">按对话轮次汇总已检索并注入上下文的个人资料与外部来源；不代表模型一定逐条引用。</p><div className="source-list">{conversationSources.map((source) => <SourceRow key={source.id} source={source} />)}</div></> : <div className="context-empty"><Icon name="book" size={22} /><p>本对话的检索资料会显示在这里。</p></div>}
+          {searching || reading ? <div className="context-searching"><span className="search-ring" /><strong>{reading ? "正在阅读网页" : "正在查找最新信息"}</strong><p>{reading ? "读取你提供的链接，结合网页内容回答。" : "只在问题需要时连接公开网络。"}</p></div> : conversationSources.length > 0 ? <><p className="context-lede">按对话轮次汇总已检索并注入上下文的个人资料与外部来源；不代表模型一定逐条引用。</p><div className="source-list">{conversationSources.map((source) => <SourceRow key={source.id} source={source} />)}</div></> : <div className="context-empty"><Icon name="book" size={22} /><p>本对话的检索资料会显示在这里。</p></div>}
           <div className="context-bottom"><span className="context-signal" /><span>{mode === "profile" ? "个人资料已启用" : "实时搜索已启用"}</span></div>
         </aside>
       </div>

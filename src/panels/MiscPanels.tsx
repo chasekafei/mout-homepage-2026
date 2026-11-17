@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MarkdownContent } from "@mout/chat-ui";
+import type { DeepSeekToolStep, ProviderEvent } from "@mout/agent-core";
 import { ABOUT, BOOKS, CATS, PRODUCTS, SCENES, type SceneId } from "../content/site";
 
 type Go = (path: string) => void;
@@ -149,6 +150,7 @@ type LiveMessage = {
   pending?: boolean;
   sources?: Array<{ id: string; title: string; source?: string; detail?: string; kind: "profile" | "project" | "web"; url?: string; project?: { name: string; href: string; eyebrow?: string } }>;
   contactPrompt?: boolean;
+  deepseekToolCalls?: DeepSeekToolStep[];
 };
 
 const AGENT_API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
@@ -159,10 +161,12 @@ async function streamHomepageAgent(
   message: string,
   history: LiveMessage[],
   onDelta: (text: string) => void,
-  onStatus: (status: "searching" | "answering") => void,
+  onStatus: (status: "searching" | "reading" | "answering") => void,
   onArchiveWarning: (message: string) => void,
   onSources: (sources: NonNullable<LiveMessage["sources"]>) => void,
   onContactPrompt: () => void,
+  onProviderContext: (deepseekToolCalls: DeepSeekToolStep[]) => void,
+  onToolWarning: (message: string) => void,
 ) {
   if (!AGENT_API_URL) {
     const lower = message.toLowerCase();
@@ -201,9 +205,20 @@ async function streamHomepageAgent(
       const raw = line.slice(5).trim();
       if (!raw || raw === "[DONE]") continue;
       try {
-        const event = JSON.parse(raw) as { type?: string; value?: string; text?: string; message?: string };
-        if (event.type === "status" && (event.value === "searching" || event.value === "answering")) onStatus(event.value);
-        if (event.type === "delta" && event.text) onDelta(event.text);
+        const event = JSON.parse(raw) as ProviderEvent;
+        if (event.type === "status" && (event.value === "searching" || event.value === "reading" || event.value === "answering")) onStatus(event.value);
+        if (event.type === "delta" && event.text) {
+          onStatus("answering");
+          onDelta(event.text);
+        }
+        if (event.type === "provider_context" && Array.isArray(event.deepseekToolCalls)) {
+          onProviderContext(event.deepseekToolCalls);
+        }
+        if (event.type === "tool_error") {
+          onToolWarning(event.tool === "deepseek_read_url"
+            ? "网页暂时无法读取，这次回答可能缺少该网页的信息。"
+            : "搜索暂时不可用，最新信息可能不完整。");
+        }
         if (event.type === "archive_warning") onArchiveWarning(event.message || "本轮对话暂时没有归档");
         if (event.type === "contact_prompt") onContactPrompt();
         if (event.type === "citation" && typeof (event as { title?: unknown }).title === "string" && typeof (event as { url?: unknown }).url === "string") {
@@ -242,9 +257,10 @@ export function ChatPanel() {
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<"searching" | "answering" | "idle">("idle");
+  const [status, setStatus] = useState<"searching" | "reading" | "answering" | "idle">("idle");
   const [error, setError] = useState("");
   const [archiveWarning, setArchiveWarning] = useState("");
+  const [toolWarning, setToolWarning] = useState("");
 
   useEffect(() => {
     if (!AGENT_API_URL) return;
@@ -260,6 +276,7 @@ export function ChatPanel() {
     setInput("");
     setError("");
     setArchiveWarning("");
+    setToolWarning("");
     const assistant: LiveMessage = { role: "assistant", content: "", pending: true };
     const next = [...messages, { role: "user" as const, content }, assistant];
     setMessages(next);
@@ -275,7 +292,10 @@ export function ChatPanel() {
       }, () => {
         assistant.contactPrompt = true;
         setMessages([...next.slice(0, -1), { ...assistant }]);
-      });
+      }, (deepseekToolCalls) => {
+        assistant.deepseekToolCalls = deepseekToolCalls;
+        setMessages([...next.slice(0, -1), { ...assistant }]);
+      }, setToolWarning);
       assistant.pending = false;
       setMessages([...next.slice(0, -1), { ...assistant }]);
     } catch (reason) {
@@ -301,8 +321,10 @@ export function ChatPanel() {
           </div>
         ))}
         {status === "searching" && <p className="chat-status">正在查找公开来源…</p>}
+        {status === "reading" && <p className="chat-status">正在阅读网页…</p>}
         {error && <p className="chat-error">{error}</p>}
         {archiveWarning && <p className="chat-status">{archiveWarning}</p>}
+        {toolWarning && <p className="chat-status" role="status">{toolWarning}</p>}
       </div>
       <form className="chat-form" onSubmit={(event) => { event.preventDefault(); void ask(input); }}>
         <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="问我做过什么，或者为什么这样想…" aria-label="输入问题" disabled={busy} />

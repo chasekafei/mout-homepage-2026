@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@mout/agent-core':
+        specifier: workspace:*
+        version: link:packages/agent-core
       '@mout/chat-ui':
         specifier: workspace:*
         version: link:packages/chat-ui

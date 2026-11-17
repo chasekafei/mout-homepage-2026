@@ -1,5 +1,6 @@
 import type { ChatMessage, ProviderEvent, ProviderRequest } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
+import { normalizeDeepSeekToolCalls, parseDeepSeekWebChunk } from "./deepseek-web.js";
 
 type ProviderConfig = { apiKey: string; baseUrl: string; model: string; webSearchTool?: string };
 
@@ -17,8 +18,17 @@ function authHeaders(provider: ProviderConfig): Record<string, string> {
   };
 }
 
-function asChatMessages(messages: ChatMessage[]) {
-  return messages.map((message) => ({ role: message.role, content: message.content }));
+function asChatMessages(messages: ChatMessage[], includeDeepSeekTools = false) {
+  return messages.map((message) => {
+    const toolCalls = includeDeepSeekTools && message.role === "assistant"
+      ? normalizeDeepSeekToolCalls(message.deepseekToolCalls)
+      : undefined;
+    return {
+      role: message.role,
+      content: message.content,
+      ...(toolCalls?.length ? { server_tool_calls: toolCalls } : {}),
+    };
+  });
 }
 
 function textFromUnknown(value: unknown): string | undefined {
@@ -32,34 +42,34 @@ function textFromUnknown(value: unknown): string | undefined {
   return undefined;
 }
 
-function parseSseBlock(block: string): ProviderEvent | null {
+function parseSseBlock(block: string, includeDeepSeekTools = false): ProviderEvent[] {
   const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n").trim();
-  if (!data || data === "[DONE]") return data === "[DONE]" ? { type: "done" } : null;
+  if (!data || data === "[DONE]") return data === "[DONE]" ? [{ type: "done" }] : [];
   try {
     const payload = JSON.parse(data) as Record<string, any>;
+    if (payload.error) return [{ type: "error", message: String(payload.error.message || payload.error) }];
+    const events = includeDeepSeekTools ? parseDeepSeekWebChunk(payload) : [];
     const annotation = payload.annotation ?? payload.url_citation ?? payload.response?.annotation;
     const citationUrl = annotation?.url ?? annotation?.url_citation?.url;
     if (typeof citationUrl === "string") {
-      return {
+      events.push({
         type: "citation",
         title: String(annotation.title ?? annotation.url_citation?.title ?? citationUrl),
         url: citationUrl,
-      };
+      });
     }
     const choice = payload.choices?.[0];
     const chatDelta = textFromUnknown(choice?.delta?.content) ?? textFromUnknown(choice?.message?.content);
     const responseDelta = textFromUnknown(payload.delta) ?? textFromUnknown(payload.output_text_delta);
     const text = chatDelta ?? responseDelta;
-    if (text) return { type: "delta", text };
+    if (text) events.push({ type: "delta", text });
     if (payload.type === "response.web_search_call.in_progress" || payload.type === "response.web_search_call.searching") {
-      return { type: "status", value: "searching" };
+      events.push({ type: "status", value: "searching" });
     }
-    if (payload.type === "response.output_text.delta") return { type: "delta", text: String(payload.delta || "") };
-    if (payload.type === "response.completed") return { type: "done" };
-    if (payload.error) return { type: "error", message: String(payload.error.message || payload.error) };
-    return null;
+    if (payload.type === "response.completed") events.push({ type: "done" });
+    return events;
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -93,10 +103,11 @@ async function readWithIdleTimeout(
   });
 }
 
-async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number): AsyncGenerator<ProviderEvent> {
+async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number, includeDeepSeekTools: boolean): AsyncGenerator<ProviderEvent> {
   if (!response.body) throw new Error("上游没有返回流");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  const citations = new Set<string>();
   let buffer = "";
   while (true) {
     const { done, value } = await readWithIdleTimeout(reader, idleTimeoutMs);
@@ -104,13 +115,32 @@ async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: nu
     const blocks = buffer.split(/\r?\n\r?\n+/);
     buffer = blocks.pop() || "";
     for (const block of blocks) {
-      const event = parseSseBlock(block);
-      if (event) yield event;
+      for (const event of parseSseBlock(block, includeDeepSeekTools)) {
+        if (event.type === "citation") {
+          if (citations.has(event.url)) continue;
+          citations.add(event.url);
+        }
+        yield event;
+      }
     }
     if (done) break;
   }
-  const event = parseSseBlock(buffer);
-  if (event) yield event;
+  for (const event of parseSseBlock(buffer, includeDeepSeekTools)) {
+    if (event.type === "citation" && citations.has(event.url)) continue;
+    yield event;
+  }
+}
+
+export function supportsDeepSeekWebTools(model: string): boolean {
+  return model === "deepseek-flash";
+}
+
+export function hasDeepSeekReadContext(messages: ChatMessage[] | undefined): boolean {
+  return (messages ?? []).some((message) => message.role === "assistant"
+    && normalizeDeepSeekToolCalls(message.deepseekToolCalls)?.some((step) => (
+      (step.calls as Array<Record<string, unknown>>).some((call) => call.kind === "read_link"
+        && call.status === "completed" && typeof call.signature === "string" && call.signature.length > 0)
+    )));
 }
 
 export async function* streamProvider(name: ProviderName, request: ProviderRequest): AsyncGenerator<ProviderEvent> {
@@ -121,7 +151,13 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
   }
 
   const useResponses = name === "gptproto" && request.useWebSearch;
-  const url = useResponses ? `${provider.baseUrl}/responses` : `${provider.baseUrl}/chat/completions`;
+  const useDeepSeekTools = name === "deepseek" && supportsDeepSeekWebTools(request.model);
+  if (name === "deepseek" && !useDeepSeekTools && (request.useWebSearch || request.useReadUrl)) {
+    yield { type: "error", message: "DeepSeek 托管搜索与链接阅读需要 deepseek-flash 模型" };
+    return;
+  }
+  const baseUrl = provider.baseUrl.replace(/\/+$/u, "");
+  const url = useResponses ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
   const body = useResponses
     ? {
         model: request.model,
@@ -129,7 +165,15 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
         input: asChatMessages(request.messages).map((message) => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })),
         tools: [{ type: provider.webSearchTool || "web_search_preview" }],
       }
-    : { model: request.model, messages: asChatMessages(request.messages), stream: true };
+    : {
+        model: request.model,
+        messages: asChatMessages(request.messages, useDeepSeekTools),
+        stream: true,
+        // Personal conversation uses the same non-thinking behavior as the old
+        // deepseek-chat integration; V4 Pro otherwise enables thinking by default.
+        ...(name === "deepseek" ? { thinking: { type: "disabled" } } : {}),
+        ...(useDeepSeekTools ? { tools: [{ type: "deepseek_web_search" }, { type: "deepseek_read_url" }] } : {}),
+      };
 
   const controller = new AbortController();
   let headerTimedOut = false;
@@ -144,7 +188,7 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
   } catch (error) {
     clearTimeout(headerTimer);
     const message = headerTimedOut
-      ? `上游响应头超时（${config.upstreamHeaderTimeoutMs}ms），GPT Proto 尚未返回响应`
+      ? `上游响应头超时（${config.upstreamHeaderTimeoutMs}ms），${name === "deepseek" ? "DeepSeek" : "GPT Proto"} 尚未返回响应`
       : error instanceof Error ? error.message : "上游请求失败";
     yield { type: "error", message };
     return;
@@ -160,8 +204,16 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
     controller.abort();
   }, config.upstreamStreamTimeoutMs);
   try {
-    yield { type: "status", value: request.useWebSearch ? "searching" : "answering" };
-    yield* parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs);
+    yield { type: "status", value: useResponses ? "searching" : "answering", provider: name, model: request.model };
+    let answering = true;
+    for await (const event of parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs, useDeepSeekTools)) {
+      if (event.type === "status") answering = event.value === "answering";
+      if (event.type === "delta" && !answering) {
+        yield { type: "status", value: "answering", provider: name, model: request.model };
+        answering = true;
+      }
+      yield event;
+    }
   } catch (error) {
     const message = totalTimedOut
       ? `上游流式响应总时长超过 ${config.upstreamStreamTimeoutMs}ms`
@@ -172,9 +224,18 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
   }
 }
 
-export function providerModel(name: ProviderName, requested?: string): string {
-  if (requested && /^[a-zA-Z0-9._:-]{2,100}$/.test(requested)) return requested;
-  return providerConfig(name).model;
+export function providerModel(
+  name: ProviderName,
+  requested?: string,
+  capabilities?: { useWebSearch?: boolean; useReadUrl?: boolean; history?: ChatMessage[] },
+): string {
+  const model = requested && /^[a-zA-Z0-9._:-]{2,100}$/.test(requested) ? requested : providerConfig(name).model;
+  // The official hosted web tools currently require Flash. Keep Pro for ordinary
+  // conversation, and use Flash for web work and follow-ups on signed webpages.
+  if (name === "deepseek" && (capabilities?.useWebSearch || capabilities?.useReadUrl || hasDeepSeekReadContext(capabilities?.history))) {
+    return "deepseek-flash";
+  }
+  return model;
 }
 
 export function sseEvent(event: ProviderEvent): Uint8Array {

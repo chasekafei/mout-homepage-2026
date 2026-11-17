@@ -242,3 +242,16 @@ test("history selection preserves client metadata while trimming token content",
   assert.deepEqual(selected[1].sources, [{ id: "fact-1", title: "项目事实" }]);
   assert.equal(selected[1].contactPrompt, true);
 });
+
+test("signed webpage context is preserved across JSON storage and counted in the history budget", () => {
+  const history: ChatMessage[] = [
+    { role: "user", content: "读这个网页" },
+    { role: "assistant", content: "网页讲的是产品设计。", deepseekToolCalls: [{ index: 0, calls: [{
+      index: 0, id: "read-1", type: "deepseek_read_url", kind: "read_link", signature: "x".repeat(600),
+    }] }] },
+  ];
+  const restored = JSON.parse(JSON.stringify(history)) as ChatMessage[];
+  assert.deepEqual(selectHistoryWithinBudget(restored, 1_000)[1]?.deepseekToolCalls, history[1].deepseekToolCalls);
+  const textOnlyBudget = history.reduce((total, message) => total + estimateTextTokens(message.content) + 8, 0);
+  assert.deepEqual(selectHistoryWithinBudget(restored, textOnlyBudget), []);
+});

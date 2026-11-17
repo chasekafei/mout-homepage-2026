@@ -33,15 +33,28 @@ ALLOWED_ORIGINS=https://mout.me,https://www.mout.me,https://im.mout.me,http://lo
 
 ## Provider
 
-默认 provider 是 GPT Proto，默认模型为 `gemini-3.8-flash`。服务端通过 OpenAI 兼容的 Chat Completions 请求普通对话；检测到“今天、最新、现在”等实时意图时，改用 GPT Proto Responses API 并启用 `web_search_preview`。
+默认通过 DeepSeek 官方 API 调用 `deepseek-v4-pro`，使用 OpenAI 兼容的 Chat Completions 和流式响应。遇到需要实时搜索、用户提供网页链接，或继续追问已读网页时，该轮使用支持官方托管工具的 `deepseek-flash`，同时声明 `deepseek_web_search` 和 `deepseek_read_url`，具体是否搜索或阅读由模型判断。两种模型都携带相同的分身人格、个人资料和对话历史，并显式设置 `thinking: { type: "disabled" }`。embedding 仍使用 GPT Proto 的 `text-embedding-3-large`，因此需要保留 `GPTPROTO_API_KEY`。
 
-DeepSeek 官方 API 作为第二个 provider，通过 `DEFAULT_PROVIDER=deepseek` 或请求级 provider 选择。浏览器永远不接触任意 provider 的 API key。
+Railway 已有环境变量会覆盖代码默认值，切换时请设置：
+
+```text
+DEFAULT_PROVIDER=deepseek
+DEEPSEEK_MODEL=deepseek-v4-pro
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_API_KEY=<DeepSeek 官方 API Key>
+```
+
+如果希望所有轮次均使用官方 Chatbot 工具链，将 `DEEPSEEK_MODEL` 改为 `deepseek-flash` 即可，不需要新增环境变量。官方工具说明：[构建 Chatbot](https://api-docs.deepseek.com/zh-cn/guides/build_a_chatbot/)、[联网工具](https://api-docs.deepseek.com/zh-cn/guides/web_tools/)；当前文档要求托管工具使用 `deepseek-flash`，因此不会向 Pro 发送不支持的工具声明。
+
+客户端会展示搜索、阅读网页的进度、网页来源和工具失败提示。DeepSeek 返回的 `server_tool_calls`（包括 `kind` 和网页 `signature`）以内部字段随消息保存到本地历史，并在后续请求中原样回传，供 DeepSeek 恢复已读网页；不会作为回答正文展示。工具回传字段也计入本地和服务端的历史预算，切换回 GPT Proto 时不会向它发送 DeepSeek 专用字段。
+
+GPT Proto 的 `gemini-3.8-flash` 仍可通过 `DEFAULT_PROVIDER=gptproto` 或请求级 provider 选择。检测到实时意图时，该路由使用 Responses API 并启用 `web_search_preview`。浏览器永远不接触任意 provider 的 API key。
 
 每次请求还会注入服务端当前时间、`AGENT_TIMEZONE` 指定的 MouT 默认时区、访客浏览器时区、星期、可推导的农历日期和常见节日。中国法定节假日的调休安排不会由模型猜测，只有在联网搜索得到可信来源时才使用。
 
 ## 语义检索
 
-知识检索默认将现有中文关键词检索与 GPT Proto embeddings 混合排序，不使用 Neon 向量扩展。向量索引只由博客、简历和口述经历原文片段的标题/章节/正文生成；不会嵌入 `facts.json` 的摘要、标签或摘要派生别名，它们只参与关键词匹配。2026 年简历 HTML、历史简历 PDF 和口述经历由本地原始来源生成片段；每轮至少向量化当前问题，只有短追问时才会在同一 API 请求中加入最近两条访客问题（各截取前 300 字符）。服务端没有加载到与语料 hash、模型版本和维数一致的索引时，或 embedding API 暂不可用时，会继续使用关键词检索。
+知识检索默认将现有中文关键词检索与 GPT Proto embeddings 混合排序，不使用 Neon 向量扩展。向量索引只由博客、简历和口述经历原文片段的标题/章节/正文生成；不会嵌入 `facts.json` 的摘要、标签或摘要派生别名，它们只参与关键词匹配。2026 年简历 HTML、历史简历 PDF 和口述经历由本地原始来源生成片段。关键词命中不足时，请求一个查询向量；短追问会把上一条访客问题（最多 300 字符）与当前问题合成一个输入。单次最多等待 5 秒，瞬时错误重试一次，之后回退关键词检索。服务端没有加载到与语料 hash、模型版本和维数一致的索引时，也会继续使用关键词检索。
 
 在本地设置 `GPTPROTO_API_KEY` 后，先从博客、简历和口述经历源文件更新原文片段，再生成静态文档索引：
 

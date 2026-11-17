@@ -1,4 +1,4 @@
-import { selectHistoryWithinBudget } from "@mout/agent-core";
+import { selectHistoryWithinBudget, type DeepSeekToolStep } from "@mout/agent-core";
 
 export type ChatRole = "user" | "assistant";
 
@@ -10,6 +10,7 @@ export type ChatMessage = {
   pending?: boolean;
   sources?: AgentSource[];
   contactPrompt?: boolean;
+  deepseekToolCalls?: DeepSeekToolStep[];
 };
 
 export type AgentSource = {
@@ -25,18 +26,20 @@ export type AgentSource = {
 export type AgentMode = "profile" | "current";
 
 export type AgentEvent =
-  | { type: "meta"; mode: AgentMode; provider?: string; model?: string; searching?: boolean }
+  | { type: "meta"; mode: AgentMode; provider?: string; model?: string; searching?: boolean; reading?: boolean }
   | { type: "delta"; text: string }
   | { type: "source"; source: AgentSource }
   | { type: "fact_sources"; sources: AgentSource[] }
   | { type: "contact_prompt" }
   | { type: "archive_warning"; message: string }
+  | { type: "provider_context"; deepseekToolCalls: DeepSeekToolStep[] }
+  | { type: "tool_error"; tool: string; code: string }
   | { type: "done" }
   | { type: "error"; message: string };
 
 type ChatRequest = {
   conversationId: string;
-  messages: Array<{ role: ChatRole; content: string }>;
+  messages: Array<Pick<ChatMessage, "role" | "content" | "deepseekToolCalls">>;
   mode: AgentMode;
   source: "im" | "homepage";
 };
@@ -111,7 +114,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(r
 async function streamMock(request: ChatRequest, onEvent: (event: AgentEvent) => void) {
   const latestQuestion = request.messages.at(-1)?.content ?? "";
   const { answer, sources, searching } = mockAnswer(latestQuestion);
-  onEvent({ type: "meta", mode: searching ? "current" : "profile", provider: "gptproto", model: "gemini-3.8-flash", searching });
+  onEvent({ type: "meta", mode: searching ? "current" : "profile", provider: "deepseek", model: "deepseek-v4-pro", searching });
   if (searching) await sleep(280);
   if (sources.length) onEvent({ type: "fact_sources", sources });
   if (/(求职|找工作|应聘|岗位|面试|内推|合作|项目合作|联系你|工作机会|collaborat|job opportunity)/iu.test(latestQuestion)) onEvent({ type: "contact_prompt" });
@@ -129,8 +132,25 @@ function parseEventLine(line: string): AgentEvent | null {
   try {
     const payload = JSON.parse(value) as Record<string, unknown>;
     if (payload.type === "status") {
-      const status = payload.value === "searching";
-      return { type: "meta", mode: status ? "current" : "profile", provider: "gptproto", model: "gemini-3.8-flash", searching: status };
+      const searching = payload.value === "searching";
+      const reading = payload.value === "reading";
+      return {
+        type: "meta",
+        mode: searching || reading ? "current" : "profile",
+        provider: typeof payload.provider === "string" ? payload.provider : undefined,
+        model: typeof payload.model === "string" ? payload.model : undefined,
+        searching,
+        reading,
+      };
+    }
+    if (payload.type === "provider_context" && Array.isArray(payload.deepseekToolCalls)) {
+      const deepseekToolCalls = payload.deepseekToolCalls.filter((step): step is DeepSeekToolStep => (
+        !!step && typeof step === "object" && !Array.isArray(step)
+      ));
+      return { type: "provider_context", deepseekToolCalls };
+    }
+    if (payload.type === "tool_error" && typeof payload.tool === "string" && typeof payload.code === "string") {
+      return { type: "tool_error", tool: payload.tool, code: payload.code };
     }
     if (payload.type === "citation" && typeof payload.title === "string" && typeof payload.url === "string") {
       return { type: "source", source: { id: payload.url, title: payload.title, kind: "web", detail: "实时来源", url: payload.url } };
@@ -163,7 +183,9 @@ export async function streamChat(request: ChatRequest, onEvent: (event: AgentEve
   const lastUserIndex = request.messages.map((message) => message.role).lastIndexOf("user");
   const message = lastUserIndex >= 0 ? request.messages[lastUserIndex].content : "";
   const history = selectHistoryWithinBudget(
-    request.messages.slice(0, lastUserIndex >= 0 ? lastUserIndex : request.messages.length).map(({ role, content }) => ({ role, content })),
+    request.messages.slice(0, lastUserIndex >= 0 ? lastUserIndex : request.messages.length).map(({ role, content, deepseekToolCalls }) => ({
+      role, content, ...(role === "assistant" && deepseekToolCalls ? { deepseekToolCalls } : {}),
+    })),
     116_000,
   );
   const controller = new AbortController();

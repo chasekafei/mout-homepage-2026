@@ -10,7 +10,7 @@ const duration = (value: string | undefined, fallback: number) => {
 export const config = {
   port: Number(process.env.PORT || 8787),
   allowedOrigins: csv(process.env.ALLOWED_ORIGINS, ["http://localhost:5173", "http://localhost:5174"]),
-  defaultProvider: (process.env.DEFAULT_PROVIDER || "gptproto") as ProviderName,
+  defaultProvider: (process.env.DEFAULT_PROVIDER || "deepseek") as ProviderName,
   timeZone: process.env.AGENT_TIMEZONE || "Asia/Shanghai",
   databaseUrl: process.env.DATABASE_URL || "",
   adminPassword: process.env.ADMIN_PASSWORD || "",
@@ -40,7 +40,7 @@ export const config = {
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY || "",
     baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-pro",
   },
   maxContextTokens: Number(process.env.MAX_CONTEXT_TOKENS || 128_000),
   contextOutputReserveTokens: Number(process.env.CONTEXT_OUTPUT_RESERVE_TOKENS || 8_192),

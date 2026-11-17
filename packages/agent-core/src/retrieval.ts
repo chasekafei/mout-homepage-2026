@@ -334,7 +334,10 @@ export function estimateTextTokens(text: string): number {
 }
 
 export function estimateMessageTokens(message: ChatMessage): number {
-  return estimateTextTokens(message.content) + 8;
+  const toolContext = message.role === "assistant" && message.deepseekToolCalls
+    ? estimateTextTokens(JSON.stringify(message.deepseekToolCalls))
+    : 0;
+  return estimateTextTokens(message.content) + toolContext + 8;
 }
 
 /** Selects the newest complete user/assistant turns that fit the estimated input budget. */
@@ -381,5 +384,5 @@ export function selectHistoryWithinBudget<T extends ChatMessage>(
 }
 
 export function shouldSearch(query: string): boolean {
-  return /(今天|昨日|昨天|最新|刚刚|现在|当前|本周|本月|最近(?:更新|发布|消息|新闻)|价格|发布|新闻|榜单|官网|链接|查一下|搜索|latest|today|current|recent|price|news)/iu.test(query);
+  return /(今天|昨日|昨天|最新|刚刚|现在|当前|本周|本月|最近(?:更新|发布|消息|新闻)|价格|发布|新闻|榜单|官网|链接|查一下|查查|帮我查|搜索|搜一下|帮我搜|上网|联网|latest|today|current|recent|price|news|search|look up|browse)/iu.test(query);
 }
