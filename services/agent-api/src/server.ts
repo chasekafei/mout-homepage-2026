@@ -290,10 +290,22 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   let citations: Array<{ title: string; url: string }> = [];
   let answerStatus: "complete" | "error" = "complete";
   const providerStartedAt = Date.now();
+  let providerHeadersAt: number | null = null;
+  let firstTokenAt: number | null = null;
   console.info(`${logPrefix} provider start promptChars=${messages.reduce((total, message) => total + message.content.length, 0)}`);
   try {
     for await (const event of streamProvider(provider, { messages, model, stream: true, useWebSearch: search })) {
-      if (event.type === "delta") answer += event.text;
+      if (event.type === "status" && providerHeadersAt === null) {
+        providerHeadersAt = Date.now();
+        console.info(`${logPrefix} provider headers after ${providerHeadersAt - providerStartedAt}ms`);
+      }
+      if (event.type === "delta") {
+        if (firstTokenAt === null) {
+          firstTokenAt = Date.now();
+          console.info(`${logPrefix} provider first-token after ${firstTokenAt - providerStartedAt}ms chars=${event.text.length}`);
+        }
+        answer += event.text;
+      }
       if (event.type === "citation") citations = [...citations, { title: event.title, url: event.url }];
       if (event.type === "error") {
         answerStatus = "error";
@@ -309,7 +321,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "error", message }));
   }
   if (!answer.trim()) answerStatus = "error";
-  console.info(`${logPrefix} provider complete duration=${Date.now() - providerStartedAt}ms status=${answerStatus} answerChars=${answer.length} total=${elapsed()}`);
+  const providerDuration = Date.now() - providerStartedAt;
+  console.info(`${logPrefix} provider complete duration=${providerDuration}ms headersMs=${providerHeadersAt === null ? "none" : providerHeadersAt - providerStartedAt} firstTokenMs=${firstTokenAt === null ? "none" : firstTokenAt - providerStartedAt} status=${answerStatus} answerChars=${answer.length} total=${elapsed()}`);
 
   const archiveWaitStartedAt = Date.now();
   const archiveTurn = await archiveTurnPromise;
