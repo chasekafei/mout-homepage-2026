@@ -39,6 +39,16 @@ function isSelfIntroductionQuery(query: string | string[]): boolean {
   return /(介绍一下自己|简单介绍|自我介绍|你是谁|你平时做什么|你的个人简介|你的职业经历|你的工作经历|about yourself|introduce yourself)/iu.test(text);
 }
 
+function isProductOverviewQuery(query: string | string[]): boolean {
+  const text = (Array.isArray(query) ? query[0] : query).replace(/\s+/gu, " ").toLocaleLowerCase("zh-CN");
+  // Listing products needs coverage across projects. A question naming one
+  // project ("Super Intern 是什么产品") still uses ordinary relevance ranking.
+  return /你(?:都|曾经|以前|之前|自己|独立|个人|还|也|主要|一共|至今|最近|近几年)*(?:做过|做了|开发过|参与过|负责过)(?:哪些|什么|多少|几个|的)?(?:ai\s*|人工智能|独立|个人|自己的)?(?:产品|项目|应用|作品)/iu.test(text)
+    || /你有(?:哪些|什么)(?:ai\s*|人工智能|独立|个人)?(?:产品|项目|应用|作品)/iu.test(text)
+    || /(?:介绍|盘点|列举|列出|说说|展示)(?:一下)?你(?:的|做过的|参与过的)(?:ai\s*|人工智能|独立|个人)?(?:产品|项目|应用|作品)/iu.test(text)
+    || /(?:what (?:products?|projects?|apps?) have you (?:built|worked on)|(?:show|list) (?:me )?your (?:products?|projects?|work))/iu.test(text);
+}
+
 /** Lexical retrieval with Chinese n-grams, curated aliases, field weighting, and term rarity. */
 export function rankFacts(query: string | string[], facts: PersonalFact[]): RankedFact[] {
   const queries = (Array.isArray(query) ? query : [query])
@@ -151,20 +161,23 @@ export function retrieveFacts(
   limit = 5,
   semanticScores: SemanticFactScore[] = [],
 ): PersonalFact[] {
+  if (limit <= 0) return [];
   const hasSemanticScores = semanticScores.length > 0 && shouldUseSemanticRetrieval(query, facts);
   const ranked = hasSemanticScores ? rankFactsHybrid(query, facts, semanticScores) : rankFacts(query, facts);
   const bestScore = ranked[0]?.score ?? 0;
-  if (bestScore < (hasSemanticScores ? 0.001 : 1.5)) return [];
+  const productOverview = isProductOverviewQuery(query);
+  if (!productOverview && bestScore < (hasSemanticScores ? 0.001 : 1.5)) return [];
   const selected: PersonalFact[] = [];
   const blogGroupCounts = new Map<string, number>();
   const resumePageCounts = new Map<string, number>();
   let resumeSourceCount = 0;
   let oralHistoryCount = 0;
   const selfIntroduction = isSelfIntroductionQuery(query);
-  const resumeSourceLimit = selfIntroduction ? 10 : 3;
+  const resumeSourceLimit = productOverview ? limit : selfIntroduction ? 10 : 3;
   const oralHistoryLimit = selfIntroduction ? 6 : 3;
   const queryTerms = (Array.isArray(query) ? query : [query]).map((text) => terms(text));
   const addCandidate = (fact: PersonalFact): boolean => {
+    if (selected.length >= limit) return false;
     if (selected.some((item) => item.id === fact.id)) return false;
     if (selfIntroduction && fact.recordType === "resume_source" && fact.sourceVersion !== "2026") return false;
     if (selfIntroduction && fact.recordType === "blog") return false;
@@ -196,7 +209,39 @@ export function retrieveFacts(
     return true;
   };
 
+  if (productOverview) {
+    const currentQuery = (Array.isArray(query) ? query[0] : query).toLocaleLowerCase("zh-CN");
+    const independentOnly = /独立|个人(?:的)?(?:产品|项目|应用|作品)|independent|side project/iu.test(currentQuery);
+    const aiOnly = /\bai\b|人工智能/iu.test(currentQuery);
+    const resumes = facts.filter((fact) => fact.visibility === "public" && fact.recordType === "resume_source");
+    const latestVersion = resumes.map((fact) => fact.sourceVersion ?? "").sort().at(-1);
+    const latest = resumes.filter((fact) => fact.sourceVersion === latestVersion);
+    const currentResume = latest.some((fact) => fact.sourceFormat === "html")
+      ? latest.filter((fact) => fact.sourceFormat === "html")
+      : latest;
+    // These section labels come from the source document, not generated prose.
+    // Keep product entries ahead of employer/role context and cover independent
+    // products as well as company projects before filling the remaining slots.
+    const portfolio = currentResume.filter((fact) => /experience|products/iu.test(fact.section ?? ""))
+      .filter((fact) => !aiOnly || /\bai\b|agent|llm|aigc|skill|人工智能/iu.test(`${fact.title} ${fact.body}`));
+    const independent = portfolio.filter((fact) => /independent products/iu.test(fact.section ?? ""));
+    const workProjects = portfolio.filter((fact) => !independent.includes(fact) && fact.groupId?.endsWith(fact.title));
+    if (independentOnly) {
+      for (const fact of independent) addCandidate(fact);
+    } else {
+      for (let index = 0; index < Math.max(workProjects.length, independent.length); index += 1) {
+        if (workProjects[index]) addCandidate(workProjects[index]);
+        if (independent[index]) addCandidate(independent[index]);
+      }
+      for (const fact of facts.filter((fact) => fact.visibility === "public" && fact.tags.includes("项目总览"))) addCandidate(fact);
+      for (const fact of portfolio) addCandidate(fact);
+    }
+    if (selected.length) return selected;
+  }
+
   if (selfIntroduction) {
+    for (const fact of facts.filter((item) => item.id === "identity" && item.visibility === "public")) addCandidate(fact);
+    const resumeBudget = Math.min(10, limit - selected.length);
     const currentResume = facts
       .filter((fact) => fact.recordType === "resume_source" && fact.sourceVersion === "2026")
       .sort((a, b) => {
@@ -214,7 +259,7 @@ export function retrieveFacts(
       });
     for (const fact of currentResume) {
       addCandidate(fact);
-      if (selected.length >= Math.min(limit, 10)) break;
+      if (resumeSourceCount >= resumeBudget) break;
     }
     const currentOralHistory = facts
       .filter((fact) => fact.recordType === "oral_history")
@@ -231,7 +276,7 @@ export function retrieveFacts(
       });
     for (const fact of currentOralHistory) {
       addCandidate(fact);
-      if (selected.length >= Math.min(limit, 16)) break;
+      if (selected.length >= limit || oralHistoryCount >= oralHistoryLimit) break;
     }
     for (const fact of facts.filter((item) => ["identity", "ai-portfolio-overview"].includes(item.id))) {
       addCandidate(fact);

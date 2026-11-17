@@ -22,10 +22,10 @@
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
 body { min-width: 320px; background: var(--night); color: var(--paper); font: 15px/1.65 var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-button, textarea { font: inherit; }
+button, textarea, select { font: inherit; }
 button { color: inherit; cursor: pointer; }
 a { color: inherit; }
-button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
 .pixel { image-rendering: pixelated; }
 
 .im-app { min-height: 100dvh; position: relative; background: linear-gradient(118deg, #111315 0%, #171a1c 56%, #101213 100%); }
@@ -99,10 +99,11 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 .message-user > .user-mark { grid-column: 2; grid-row: 1; }
 .message-user > .message-body { grid-column: 1; grid-row: 1; text-align: right; }
 .user-mark { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid rgba(239,233,220,.18); background: rgba(239,233,220,.05); color: var(--muted-2); font: 11px/1 var(--mono); }
-.message-head { display: flex; align-items: baseline; gap: 10px; min-height: 30px; }
+.message-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 10px; min-height: 30px; }
 .message-user .message-head { justify-content: flex-end; }
 .message-head strong { color: var(--paper); font-size: 13px; font-weight: 500; }
 .message-head time { color: var(--muted); font: 10px/1 var(--mono); }
+.message-model { max-width: 100%; overflow: hidden; border: 1px solid rgba(239,233,220,.1); padding: 2px 5px; color: var(--muted); font: 9px/1.35 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .message-markdown { margin-top: 4px; color: var(--paper-2); font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
 .message-markdown > :first-child { margin-top: 0; }
 .message-markdown > :last-child { margin-bottom: 0; }
@@ -152,9 +153,17 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 
 .composer-wrap { flex: none; width: min(100%, 640px); margin: 24px auto 0; }
 .chat-column.is-welcome .composer-wrap { margin: auto auto 0; }
-.composer-mode { display: flex; align-items: center; gap: 7px; margin: 0 0 8px 4px; color: var(--muted); font: 10px/1 var(--mono); }
+.composer-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin: 0 0 8px 4px; }
+.composer-mode { display: flex; align-items: center; gap: 7px; color: var(--muted); font: 10px/1 var(--mono); }
 .composer-mode button { display: grid; place-items: center; border: 0; padding: 0; background: none; color: var(--muted); }
 .composer-mode button:hover { color: var(--paper); }
+.model-picker { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; margin-left: auto; color: var(--muted); font: 10px/1.3 var(--mono); }
+.model-picker-control { position: relative; display: flex; min-width: 0; }
+.model-picker select { appearance: none; width: 185px; max-width: 100%; min-height: 30px; border: 1px solid var(--line); border-radius: 2px; padding: 5px 26px 5px 9px; background: rgba(239,233,220,.035); color: var(--paper-2); font: 11px/1.3 var(--sans); cursor: pointer; }
+.model-picker select:hover:not(:disabled) { border-color: rgba(110,224,198,.4); }
+.model-picker select:disabled { opacity: .45; cursor: default; }
+.model-picker option { background: var(--night-2); color: var(--paper); }
+.model-picker-control > svg { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 .mode-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); }
 .composer { position: relative; border: 1px solid rgba(239,233,220,.22); padding: 13px 14px 10px 17px; background: rgba(239,233,220,.06); box-shadow: 0 0 0 5px rgba(239,233,220,.015); transition: border .2s, background .2s; }
 .composer:focus-within { border-color: rgba(110,224,198,.6); background: rgba(239,233,220,.08); }

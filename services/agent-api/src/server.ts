@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
   buildSystemPrompt,
+  AGENT_CHAT_MODELS,
+  isAgentChatModelId,
   estimateTextTokens,
   factContext,
   retrieveFacts,
@@ -137,6 +139,14 @@ function asRequest(value: unknown): AgentRequest {
   const conversationId = typeof input.conversationId === "string" ? input.conversationId.trim() : undefined;
   if (conversationId && !/^[a-zA-Z0-9_-]{8,128}$/.test(conversationId)) throw new Error("conversationId 格式不正确");
   const provider = input.provider === "deepseek" ? "deepseek" : input.provider === "gptproto" ? "gptproto" : undefined;
+  const model = typeof input.model === "string" ? input.model : undefined;
+  if (model && (provider || config.defaultProvider) === "gptproto" && !isAgentChatModelId(model)) {
+    throw new Error("请选择列表中支持的聊天模型");
+  }
+  if (model && isAgentChatModelId(model)
+    && AGENT_CHAT_MODELS.find((item) => item.id === model)?.provider !== (provider || config.defaultProvider)) {
+    throw new Error("模型与 API provider 不匹配");
+  }
   const mode = input.mode === "about" || input.mode === "work" || input.mode === "opinion" || input.mode === "casual" ? input.mode : "casual";
   const history: ChatMessage[] = Array.isArray(input.history) ? input.history
     .filter((item): item is ChatMessage => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string")
@@ -145,7 +155,7 @@ function asRequest(value: unknown): AgentRequest {
       const toolCalls = item.role === "assistant" ? normalizeDeepSeekToolCalls(item.deepseekToolCalls) : undefined;
       return { role: item.role, content: item.content, ...(toolCalls?.length ? { deepseekToolCalls: toolCalls } : {}) };
     }) : [];
-  return { message, conversationId, timezone: typeof input.timezone === "string" ? input.timezone : undefined, history, provider, mode, model: typeof input.model === "string" ? input.model : undefined, source: input.source === "homepage" ? "homepage" : "im" };
+  return { message, conversationId, timezone: typeof input.timezone === "string" ? input.timezone : undefined, history, provider, mode, model, source: input.source === "homepage" ? "homepage" : "im" };
 }
 
 async function handleChat(req: IncomingMessage, res: ServerResponse) {

@@ -33,9 +33,23 @@ ALLOWED_ORIGINS=https://mout.me,https://www.mout.me,https://im.mout.me,http://lo
 
 ## Provider
 
-默认通过 DeepSeek 官方 API 调用 `deepseek-v4-pro`，使用 OpenAI 兼容的 Chat Completions 和流式响应。遇到需要实时搜索、用户提供网页链接，或继续追问已读网页时，该轮使用支持官方托管工具的 `deepseek-flash`，同时声明 `deepseek_web_search` 和 `deepseek_read_url`，具体是否搜索或阅读由模型判断。两种模型都携带相同的分身人格、个人资料和对话历史，并显式设置 `thinking: { type: "disabled" }`。embedding 仍使用 GPT Proto 的 `text-embedding-3-large`，因此需要保留 `GPTPROTO_API_KEY`。
+独立聊天页在输入框上方提供模型选择器，默认 Gemini 3.8 Flash。选择保存在当前浏览器；切换模型保留对话，每条回复显示实际模型并随历史保存。想比较不同模型的独立回答时，可先新建对话再问同一个问题。模型目录在 `packages/agent-core/src/models.ts`，前端与 API 使用同一份 ID 和 provider 对应表。
 
-Railway 已有环境变量会覆盖代码默认值，切换时请设置：
+| 模型 | API 模型 ID | Provider |
+| --- | --- | --- |
+| Gemini 3.8 Flash | `gemini-3.8-flash` | GPT Proto |
+| Gemini 4 Hydrogen | `gemini-4-hydrogen` | GPT Proto |
+| Gemini 4 Argon | `gemini-4-argon` | GPT Proto |
+| GPT 6.1 Sol | `gpt-6.1-sol` | GPT Proto |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | GPT Proto |
+| Claude Fable 5.2 | `claude-fable-5-2` | GPT Proto |
+| DeepSeek V4 Pro | `deepseek-v4-pro` | DeepSeek 官方 |
+
+选择器随每次请求显式发送 provider 和 model，因此不会被 Railway 的默认 provider 覆盖；不需要为每个模型添加环境变量。GPT Proto 的六个模型共用 `GPTPROTO_API_KEY`，DeepSeek 使用 `DEEPSEEK_API_KEY`。未显式选择模型的入口（例如首页）沿用服务端环境变量，代码默认 `DEFAULT_PROVIDER=gptproto`、`GPTPROTO_MODEL=gemini-3.8-flash`。embedding 仍使用 GPT Proto 的 `text-embedding-3-large`。
+
+DeepSeek V4 Pro 保留原有官方工具路径：需要实时搜索、用户提供网页链接或继续追问已读网页时，该轮使用支持官方托管工具的 `deepseek-flash`，同时声明 `deepseek_web_search` 和 `deepseek_read_url`。具体是否搜索或阅读由模型判断；回复上的模型标签和日志会标明实际模型。两种模型都携带相同的分身人格、个人资料和对话历史，并显式设置 `thinking: { type: "disabled" }`。
+
+如果希望未选择模型的入口也默认使用 DeepSeek，可在 Railway 设置：
 
 ```text
 DEFAULT_PROVIDER=deepseek

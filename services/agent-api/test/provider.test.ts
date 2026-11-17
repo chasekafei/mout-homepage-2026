@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ProviderRequest } from "@mout/agent-core";
 import { config } from "../src/config.js";
 import { providerModel, streamProvider } from "../src/provider.js";
+import { AGENT_CHAT_MODELS, isAgentChatModelId } from "../../../packages/agent-core/src/models.js";
 
 test("provider reports a response-header timeout separately", async () => {
   const originalFetch = globalThis.fetch;
@@ -169,5 +170,42 @@ test("GPTProto requests never receive DeepSeek-native context", async () => {
   } finally {
     globalThis.fetch = originalFetch;
     config.gptproto.apiKey = originalKey;
+  }
+});
+
+test("picker models retain their exact IDs and use their selected provider", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalGptProtoKey = config.gptproto.apiKey;
+  const originalDeepSeekKey = config.deepseek.apiKey;
+  config.gptproto.apiKey = "test-gptproto-key";
+  config.deepseek.apiKey = "test-deepseek-key";
+  const captured: Array<{ host: string; model: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    const body = JSON.parse(String(init?.body));
+    captured.push({ host: new URL(String(input)).host, model: body.model });
+    return new Response('data: {"choices":[{"delta":{"content":"你好。"}}]}\n\ndata: [DONE]\n\n');
+  };
+  try {
+    for (const selected of AGENT_CHAT_MODELS) {
+      assert.ok(isAgentChatModelId(selected.id));
+      const model = providerModel(selected.provider, selected.id, { useWebSearch: false });
+      assert.equal(model, selected.id);
+      const events = [];
+      for await (const event of streamProvider(selected.provider, {
+        model, messages: [{ role: "user", content: "你都做过什么产品？" }], stream: true, useWebSearch: false,
+      })) events.push(event);
+      assert.ok(events.some((event) => event.type === "delta" && event.text === "你好。"));
+      assert.ok(events.some((event) => event.type === "status" && event.provider === selected.provider && event.model === selected.id));
+    }
+    assert.deepEqual(captured, AGENT_CHAT_MODELS.map((selected) => ({
+      host: new URL(selected.provider === "deepseek" ? config.deepseek.baseUrl : config.gptproto.baseUrl).host,
+      model: selected.id,
+    })));
+    assert.equal(captured.filter((request) => request.host === "api.deepseek.com").length, 1);
+    assert.ok(!isAgentChatModelId("unlisted-model"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    config.gptproto.apiKey = originalGptProtoKey;
+    config.deepseek.apiKey = originalDeepSeekKey;
   }
 });

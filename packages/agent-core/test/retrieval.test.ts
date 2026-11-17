@@ -6,7 +6,7 @@ import resumes from "../../../content/agent-public/resume-source.json" with { ty
 import oralHistory from "../../../content/agent-public/oral-history.json" with { type: "json" };
 import semanticEval from "./semantic-retrieval-eval.json" with { type: "json" };
 import { buildSystemPrompt } from "../src/persona.js";
-import { estimateTextTokens, factContext, rankFactsHybrid, retrieveFacts, selectHistoryWithinBudget } from "../src/retrieval.js";
+import { estimateTextTokens, factContext, rankFacts, rankFactsHybrid, retrieveFacts, selectHistoryWithinBudget } from "../src/retrieval.js";
 import type { ChatMessage, PersonalFact } from "../src/types.js";
 
 const corpus = [...facts, ...blogs, ...resumes, ...oralHistory] as PersonalFact[];
@@ -48,6 +48,70 @@ test("latest resume dates win without guessing current employment", () => {
 test("recent user turns help resolve short follow-up questions", () => {
   const retrieved = retrieveFacts(["它当时为什么做？", "你做过什么 AI 项目"], corpus);
   assert.ok(retrieved.some((fact) => fact.recordType === "oral_history" || fact.recordType === "resume_source"));
+});
+
+test("product overview questions cover current work and independent product originals instead of Figma anecdotes", () => {
+  const expectedSources = [
+    "resume-2026-html-03", // Super Intern
+    "resume-2026-html-04", // Fakers
+    "resume-2026-html-05", // Ammonad
+    "resume-2026-html-18", // Steins;Inn
+    "resume-2026-html-19", // CrossPod
+    "resume-2026-html-20", // Find Muse
+  ];
+  const queries: Array<string | string[]> = [
+    "你都做过什么产品？",
+    "你自己做过哪些产品？",
+    "你做过哪些产品？",
+    "介绍一下你做过的项目",
+    "你参与过哪些项目？",
+    "你有哪些产品？",
+    "能列举一下你做过的产品吗？",
+    ["你都做过什么产品？", "你可以叫我测试者，我是受邀来测试的。"],
+  ];
+  for (const query of queries) {
+    const retrieved = retrieveFacts(query, corpus, 20);
+    for (const id of expectedSources) {
+      const source = corpus.find((fact) => fact.id === id);
+      assert.ok(retrieved.some((fact) => fact.id === id && fact.body === source?.body), `${String(query)} -> ${id}`);
+    }
+    assert.ok(retrieved.length <= 20);
+    assert.ok(!retrieved.some((fact) => [
+      "oral-history-001-个人网站资料-我的个人经历-35",
+      "oral-history-001-个人网站资料-我的个人经历-41",
+    ].includes(fact.id)));
+    assert.ok(retrieved.every((fact) => fact.recordType !== "resume_source" || fact.sourceVersion === "2026"));
+  }
+  for (const limit of [1, 5, 8, 20]) {
+    assert.ok(retrieveFacts("你都做过什么产品？", corpus, limit).length <= limit);
+  }
+  assert.equal(retrieveFacts("你都做过什么产品？", corpus, 0).length, 0);
+});
+
+test("product overview scopes independent work and leaves named project questions to relevance ranking", () => {
+  const independent = retrieveFacts("你做过什么独立产品？", corpus, 20);
+  assert.ok(independent.some((fact) => fact.id === "resume-2026-html-19"));
+  assert.ok(independent.some((fact) => fact.id === "resume-2026-html-20"));
+  assert.ok(independent.every((fact) => /Independent Products/u.test(fact.section ?? "")));
+  const project = retrieveFacts("Super Intern 是什么产品", corpus, 20);
+  assert.ok(project.some((fact) => fact.id === "super-intern"));
+  assert.ok(!project.some((fact) => fact.id === "resume-2026-html-19"));
+});
+
+test("generated oral-history aliases do not turn Figma passages into a product portfolio", () => {
+  const genericQuestion = "你做过什么产品";
+  for (const id of [
+    "oral-history-001-个人网站资料-我的个人经历-24",
+    "oral-history-001-个人网站资料-我的个人经历-35",
+    "oral-history-001-个人网站资料-我的个人经历-41",
+  ]) {
+    const passage = corpus.find((fact) => fact.id === id);
+    assert.ok(passage);
+    assert.ok(!passage.queries?.includes(genericQuestion));
+    assert.ok(!passage.keywords?.includes(genericQuestion));
+  }
+  assert.ok(rankFacts("你都做过什么产品？", corpus).slice(0, 3)
+    .every(({ fact }) => !["oral-history-001-个人网站资料-我的个人经历-35", "oral-history-001-个人网站资料-我的个人经历-41"].includes(fact.id)));
 });
 
 test("semantic eval cases reference existing corpus records and fusion surfaces semantic matches", () => {

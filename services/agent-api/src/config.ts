@@ -10,7 +10,7 @@ const duration = (value: string | undefined, fallback: number) => {
 export const config = {
   port: Number(process.env.PORT || 8787),
   allowedOrigins: csv(process.env.ALLOWED_ORIGINS, ["http://localhost:5173", "http://localhost:5174"]),
-  defaultProvider: (process.env.DEFAULT_PROVIDER || "deepseek") as ProviderName,
+  defaultProvider: (process.env.DEFAULT_PROVIDER || "gptproto") as ProviderName,
   timeZone: process.env.AGENT_TIMEZONE || "Asia/Shanghai",
   databaseUrl: process.env.DATABASE_URL || "",
   adminPassword: process.env.ADMIN_PASSWORD || "",

@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { selectHistoryWithinBudget } from "@mout/agent-core";
+import { AGENT_CHAT_MODELS, DEFAULT_AGENT_CHAT_MODEL, isAgentChatModelId, selectHistoryWithinBudget, type AgentChatModelId } from "@mout/agent-core";
 import { AgentEvent, AgentMode, AgentSource, ChatMessage, isMockMode, streamChat, warmAgentBackend } from "./api";
 import { MarkdownContent } from "@mout/chat-ui";
 import "./styles.css";
@@ -26,6 +26,9 @@ const QUICK_PROMPTS = [
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const CONVERSATIONS_KEY = "mout.im.conversations.v1";
+const MODEL_SELECTION_KEY = "mout.im.model.v1";
+const MODEL_LABELS = new Map<string, string>(AGENT_CHAT_MODELS.map((model) => [model.id, model.label]));
+MODEL_LABELS.set("deepseek-flash", "DeepSeek Flash");
 const MAX_STORED_MESSAGES = 256;
 const MAX_CONVERSATIONS = 12;
 const ACTIVE_STORAGE_BUDGET = 116_000;
@@ -41,6 +44,16 @@ type StoredConversation = {
 };
 
 type ConversationState = { activeId: string; conversations: StoredConversation[] };
+
+function loadSelectedModel(): AgentChatModelId {
+  try {
+    const saved = localStorage.getItem(MODEL_SELECTION_KEY);
+    if (isAgentChatModelId(saved)) return saved;
+  } catch {
+    // A browser with storage disabled can still switch models for this visit.
+  }
+  return DEFAULT_AGENT_CHAT_MODEL;
+}
 
 function newConversation(): StoredConversation {
   return {
@@ -219,6 +232,7 @@ export function App() {
   const activeConversation = conversationState.conversations.find((item) => item.id === conversationState.activeId) ?? conversationState.conversations[0];
   const messages = activeConversation?.messages ?? [];
   const [mode, setMode] = useState<AgentMode>(() => activeConversation?.mode ?? "profile");
+  const [selectedModel, setSelectedModel] = useState<AgentChatModelId>(loadSelectedModel);
   const [isStreaming, setIsStreaming] = useState(false);
   const [searching, setSearching] = useState(false);
   const [reading, setReading] = useState(false);
@@ -240,6 +254,10 @@ export function App() {
   const followPageBottom = useRef(true);
 
   useEffect(() => { void warmAgentBackend(); }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(MODEL_SELECTION_KEY, selectedModel); } catch { /* Model switching remains available without storage. */ }
+  }, [selectedModel]);
 
   const setMessages: MessageSetter = (value) => {
     setConversationState((state) => ({
@@ -350,7 +368,7 @@ export function App() {
     setInput("");
     setError("");
     const user: ChatMessage = { id: makeId("user"), role: "user", content, createdAt: Date.now() };
-    const assistant: ChatMessage = { id: makeId("assistant"), role: "assistant", content: "", createdAt: Date.now(), pending: true };
+    const assistant: ChatMessage = { id: makeId("assistant"), role: "assistant", content: "", createdAt: Date.now(), pending: true, provider: AGENT_CHAT_MODELS.find((model) => model.id === selectedModel)?.provider, model: selectedModel };
     const next = [...messages, user, assistant];
     setMessages(next);
     setArchiveWarning("");
@@ -364,11 +382,16 @@ export function App() {
       const requestMessages = next.filter((message) => !message.pending).map(({ role, content: text, deepseekToolCalls }) => ({
         role, content: text, ...(role === "assistant" && deepseekToolCalls ? { deepseekToolCalls } : {}),
       }));
-      await streamChat({ conversationId: conversationState.activeId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im" }, (event: AgentEvent) => {
+      await streamChat({ conversationId: conversationState.activeId, messages: requestMessages, mode, source: cameFromHomepage ? "homepage" : "im", model: selectedModel }, (event: AgentEvent) => {
         if (event.type === "meta") {
           setSearching(Boolean(event.searching));
           setReading(Boolean(event.reading));
           if (event.searching || event.reading) setShowContext(true);
+          if (event.provider || event.model) {
+            setMessages((current) => current.map((message) => message.id === assistant.id
+              ? { ...message, ...(event.provider ? { provider: event.provider } : {}), ...(event.model ? { model: event.model } : {}) }
+              : message));
+          }
         }
         if (event.type === "provider_context") {
           setMessages((current) => current.map((message) => message.id === assistant.id
@@ -481,7 +504,7 @@ export function App() {
                   <article className={`message message-${message.role}`} key={message.id}>
                     {message.role === "assistant" ? <AssistantMark small /> : <span className="user-mark">你</span>}
                     <div className="message-body">
-                      <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time></div>
+                      <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time>{message.role === "assistant" && message.model && <span className="message-model" title={message.model}>{MODEL_LABELS.get(message.model) ?? message.model}</span>}</div>
                       {message.role === "assistant" && message.pending && !message.content
                         ? searching || reading ? <div className="searching-state"><span className="searching-pulse" /><span>{reading ? "正在阅读网页" : "正在查找公开资料"}</span></div> : <div className="thinking-state">i 人组织语言中<span className="thinking-dots" aria-hidden>···</span></div>
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
@@ -502,7 +525,10 @@ export function App() {
           </div>
 
           <div className="composer-wrap">
-            <div className="composer-mode"><span className="mode-pulse" /><span>{mode === "profile" ? "本地知识库模式" : "实时信息模式"}</span><button type="button" onClick={() => changeMode(mode === "profile" ? "current" : "profile")} aria-label="切换回答模式"><Icon name="chevron" size={15} /></button></div>
+            <div className="composer-controls">
+              <div className="composer-mode"><span className="mode-pulse" /><span>{mode === "profile" ? "本地知识库模式" : "实时信息模式"}</span><button type="button" onClick={() => changeMode(mode === "profile" ? "current" : "profile")} aria-label="切换回答模式"><Icon name="chevron" size={15} /></button></div>
+              <label className="model-picker"><span>模型</span><span className="model-picker-control"><select aria-label="选择聊天模型" value={selectedModel} disabled={isStreaming} onChange={(event) => { if (!isStreaming && isAgentChatModelId(event.target.value)) setSelectedModel(event.target.value); }}>{AGENT_CHAT_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select><Icon name="chevron" size={13} /></span></label>
+            </div>
             <form className={`composer ${isStreaming ? "is-streaming" : ""}`} onSubmit={handleSubmit}>
               <textarea ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} rows={1} placeholder={mode === "profile" ? "问我做过什么，或者为什么这样想…" : "想查什么最新信息？"} aria-label="输入问题" disabled={isStreaming} />
               <div className="composer-bottom"><span className="composer-hint"><kbd>Enter</kbd> 发送 <span>·</span> <kbd>Shift</kbd><span>+</span><kbd>Enter</kbd> 换行</span><button className="send-button" type="submit" disabled={!input.trim() || isStreaming} aria-label="发送问题"><Icon name="arrow" size={19} /></button></div>

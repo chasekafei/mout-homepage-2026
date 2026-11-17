@@ -1,4 +1,4 @@
-import { selectHistoryWithinBudget, type DeepSeekToolStep } from "@mout/agent-core";
+import { AGENT_CHAT_MODELS, selectHistoryWithinBudget, type AgentChatModelId, type DeepSeekToolStep } from "@mout/agent-core";
 
 export type ChatRole = "user" | "assistant";
 
@@ -11,6 +11,8 @@ export type ChatMessage = {
   sources?: AgentSource[];
   contactPrompt?: boolean;
   deepseekToolCalls?: DeepSeekToolStep[];
+  provider?: string;
+  model?: string;
 };
 
 export type AgentSource = {
@@ -42,6 +44,7 @@ type ChatRequest = {
   messages: Array<Pick<ChatMessage, "role" | "content" | "deepseekToolCalls">>;
   mode: AgentMode;
   source: "im" | "homepage";
+  model: AgentChatModelId;
 };
 
 const API_URL = (import.meta.env.VITE_AGENT_API_URL as string | undefined)?.replace(/\/$/, "");
@@ -114,7 +117,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(r
 async function streamMock(request: ChatRequest, onEvent: (event: AgentEvent) => void) {
   const latestQuestion = request.messages.at(-1)?.content ?? "";
   const { answer, sources, searching } = mockAnswer(latestQuestion);
-  onEvent({ type: "meta", mode: searching ? "current" : "profile", provider: "deepseek", model: "deepseek-v4-pro", searching });
+  onEvent({ type: "meta", mode: searching ? "current" : "profile", provider: AGENT_CHAT_MODELS.find((model) => model.id === request.model)?.provider, model: request.model, searching });
   if (searching) await sleep(280);
   if (sources.length) onEvent({ type: "fact_sources", sources });
   if (/(求职|找工作|应聘|岗位|面试|内推|合作|项目合作|联系你|工作机会|collaborat|job opportunity)/iu.test(latestQuestion)) onEvent({ type: "contact_prompt" });
@@ -175,6 +178,8 @@ function parseEventLine(line: string): AgentEvent | null {
 }
 
 export async function streamChat(request: ChatRequest, onEvent: (event: AgentEvent) => void, signal?: AbortSignal) {
+  const selectedModel = AGENT_CHAT_MODELS.find((model) => model.id === request.model);
+  if (!selectedModel) throw new Error("请选择一个可用的聊天模型");
   if (MOCK) {
     await streamMock(request, onEvent);
     return;
@@ -203,7 +208,7 @@ export async function streamChat(request: ChatRequest, onEvent: (event: AgentEve
     const response = await fetch(`${API_URL}/v1/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ conversationId: request.conversationId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: request.mode === "current" ? "casual" : "about", source: request.source }),
+      body: JSON.stringify({ conversationId: request.conversationId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message, history, mode: request.mode === "current" ? "casual" : "about", source: request.source, provider: selectedModel.provider, model: selectedModel.id }),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`Agent API ${response.status}`);
