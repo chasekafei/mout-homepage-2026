@@ -16,7 +16,7 @@ pnpm build        # 类型检查 + 产物输出到 dist/
 
 ## 个人 Agent
 
-个人 Agent 采用同仓库 mono repo 结构：独立聊天页在 `apps/im`，模型调用和联网搜索在 `services/agent-api`，人格规则与公开资料在 `packages/agent-core` 和 `content/agent-public`。独立聊天页可切换 7 个模型，默认 Gemini 4 Hydrogen；Gemini、GPT、Claude 使用 GPT Proto，DeepSeek V4 Pro 使用官方 API。详细的环境变量、运行方式和发布前检查见 [`docs/agent/README.md`](docs/agent/README.md)。
+个人 Agent 采用同仓库 mono repo 结构：独立聊天页在 `apps/im`，模型调用和联网搜索在 `services/agent-api`，人格规则与公开资料在 `packages/agent-core` 和 `content/agent-public`。独立聊天页可切换 7 个模型，默认 Gemini 4 Hydrogen；Gemini、GPT、Claude 优先使用 Vercel AI Gateway、GPTProto 作为同模型备用，DeepSeek V4 Pro 使用官方 API。详细的环境变量、运行方式和发布前检查见 [`docs/agent/README.md`](docs/agent/README.md)。
 
 ```bash
 pnpm build:all     # 首页、独立聊天页、Agent core 和 API 的检查

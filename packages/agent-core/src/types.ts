@@ -1,6 +1,8 @@
 export type AgentMode = "about" | "work" | "opinion" | "casual";
 
 export type ChatRole = "system" | "user" | "assistant" | "developer";
+export type AgentProvider = "gptproto" | "vercel" | "deepseek";
+export type AgentProviderPreference = AgentProvider | "auto";
 
 // DeepSeek's opaque tool records must retain kind/signature for later turns.
 export type DeepSeekToolStep = Record<string, unknown>;
@@ -51,7 +53,7 @@ export type AgentRequest = {
   timezone?: string;
   history?: ChatMessage[];
   mode?: AgentMode;
-  provider?: "gptproto" | "deepseek";
+  provider?: AgentProviderPreference;
   model?: string;
   source?: "homepage" | "im";
 };
@@ -69,10 +71,12 @@ export type ProviderEvent =
   | { type: "fact_sources"; sources: FactSource[] }
   | { type: "contact_prompt" }
   | { type: "citation"; title: string; url: string }
-  | { type: "status"; value: "searching" | "reading" | "answering"; provider?: "gptproto" | "deepseek"; model?: string }
+  | { type: "status"; value: "searching" | "reading" | "answering"; provider?: AgentProvider; model?: string }
+  | { type: "provider_attempt"; provider: AgentProvider; model: string; attempt: number }
+  | { type: "provider_fallback"; from: AgentProvider; to: AgentProvider; model: string; code: string }
   | { type: "provider_context"; deepseekToolCalls: DeepSeekToolStep[] }
   | { type: "tool_error"; tool: string; code: string }
   | { type: "search_evidence"; metadataPresent: boolean; queries: string[]; sourceUrls: string[]; supportCount: number; hasSearchEntryPoint: boolean; toolUsePromptTokens?: number }
   | { type: "archive_warning"; message: string }
   | { type: "done"; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; status?: number; code?: string; retryable?: boolean };

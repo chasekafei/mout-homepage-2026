@@ -57,7 +57,14 @@ export function parseGeminiChunk(payload: unknown): ProviderEvent[] {
   if (Array.isArray(payload)) return payload.flatMap(parseGeminiChunk);
   if (!payload || typeof payload !== "object") return [];
   const data = payload as Record<string, any>;
-  if (data.error) return [{ type: "error", message: String(data.error.message || data.error) }];
+  if (data.error) {
+    const status = Number(data.error.code);
+    const retryable = [408, 425, 429].includes(status) || status >= 500
+      || ["UNAVAILABLE", "RESOURCE_EXHAUSTED", "INTERNAL", "DEADLINE_EXCEEDED"].includes(data.error.status);
+    return [{ type: "error", message: String(data.error.message || data.error), code: "upstream_stream_error", retryable,
+      ...(Number.isFinite(status) ? { status } : {}),
+    }];
+  }
   if (data.promptFeedback?.blockReason) return [{ type: "error", message: `上游未生成回答：${data.promptFeedback.blockReason}` }];
   const candidate = data.candidates?.[0];
   const evidence = searchEvidence(data, candidate);

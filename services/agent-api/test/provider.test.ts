@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ProviderRequest } from "@mout/agent-core";
 import { config } from "../src/config.js";
-import { providerModel, streamProvider } from "../src/provider.js";
+import { primaryProvider, providerModel, streamProvider } from "../src/provider.js";
 import { AGENT_CHAT_MODELS, isAgentChatModelId } from "../../../packages/agent-core/src/models.js";
 import { usesNativeGemini } from "../src/gemini.js";
 
@@ -26,10 +26,9 @@ test("provider reports a response-header timeout separately", async () => {
   try {
     const events = [];
     for await (const event of streamProvider("gptproto", request)) events.push(event);
-    assert.equal(events.length, 1);
-    assert.equal(events[0]?.type, "error");
-    assert.ok(events[0]?.type === "error");
-    assert.match(events[0].message, /响应头超时/);
+    const errors = events.filter((event) => event.type === "error");
+    assert.equal(errors.length, 1);
+    assert.match(errors[0].message, /响应头超时/);
   } finally {
     globalThis.fetch = originalFetch;
     config.gptproto.apiKey = originalKey;
@@ -71,6 +70,7 @@ test("DeepSeek V4 Pro uses the official endpoint and streams final answers witho
       messages, model: "deepseek-v4-pro", stream: true, useWebSearch: false,
     })) events.push(event);
     assert.deepEqual(events, [
+      { type: "provider_attempt", provider: "deepseek", model: "deepseek-v4-pro", attempt: 1 },
       { type: "status", value: "answering", provider: "deepseek", model: "deepseek-v4-pro" },
       { type: "delta", text: "你叫测试者。" },
       { type: "done" },
@@ -193,14 +193,14 @@ test("picker models retain their exact IDs and use their selected provider", asy
   try {
     for (const selected of AGENT_CHAT_MODELS) {
       assert.ok(isAgentChatModelId(selected.id));
-      const model = providerModel(selected.provider, selected.id, { useWebSearch: false });
+      const model = providerModel(primaryProvider(selected.provider, selected.id), selected.id, { useWebSearch: false });
       assert.equal(model, selected.id);
       const events = [];
       for await (const event of streamProvider(selected.provider, {
         model, messages: [{ role: "user", content: "你都做过什么产品？" }], stream: true, useWebSearch: false,
       })) events.push(event);
       assert.ok(events.some((event) => event.type === "delta" && event.text === "你好。"));
-      assert.ok(events.some((event) => event.type === "status" && event.provider === selected.provider && event.model === selected.id));
+      assert.ok(events.some((event) => event.type === "status" && event.provider === primaryProvider(selected.provider, selected.id) && event.model === selected.id));
     }
     assert.deepEqual(captured, AGENT_CHAT_MODELS.map((selected) => ({
       host: new URL(selected.provider === "deepseek" ? config.deepseek.baseUrl : config.gptproto.baseUrl).host,

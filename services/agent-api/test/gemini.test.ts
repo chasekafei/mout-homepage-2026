@@ -100,7 +100,7 @@ test("upstream failures, blocked replies and incomplete generation never produce
     assert.ok(events.some((event) => event.type === "error"), JSON.stringify(payload));
     assert.ok(events.every((event) => event.type !== "done"), JSON.stringify(payload));
   }
-  assert.deepEqual(parseGeminiChunk(cases[0]), [{ type: "error", message: "contents is not specified" }]);
+  assert.deepEqual(parseGeminiChunk(cases[0]), [{ type: "error", message: "contents is not specified", status: 400, code: "upstream_stream_error", retryable: false }]);
   assert.ok(!parseGeminiChunk(cases[1]).some((event) => event.type === "delta"));
   assert.ok(!parseGeminiChunk(cases[2]).some((event) => event.type === "delta"));
   assert.ok(parseGeminiChunk(cases[3]).some((event) => event.type === "delta" && event.text === "未完成的正文"));

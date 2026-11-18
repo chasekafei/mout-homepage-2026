@@ -7,11 +7,21 @@ import { fileURLToPath } from "node:url";
 test("chat obtains structured search sources before asking Hydrogen and exposes them in SSE", { timeout: 20_000 }, async () => {
   const requests: Array<{ path: string; body: any }> = [];
   let searchHasResults = true;
+  let vercelFails = false;
   const gateway = createServer(async (req, res) => {
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const body = JSON.parse(raw || "{}");
     requests.push({ path: req.url || "", body });
+    if (req.url === "/v1/tools/fetch") {
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ title: "读取的网页", content: "# PAGEONLYFACT\n网页正文与当前问题有关。" }));
+    }
+    if (req.url === "/v1/chat/completions") {
+      if (vercelFails) { res.statusCode = 429; return res.end("overloaded"); }
+      res.setHeader("Content-Type", "text/event-stream");
+      return res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: "来自 Vercel 的正文。" } }] })}\n\ndata: [DONE]\n\n`);
+    }
     if (req.url === "/v1/tools/search") {
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ results: searchHasResults ? [{
@@ -39,6 +49,7 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
   ], { env: {
     ...process.env, PORT: "0", DEFAULT_PROVIDER: "gptproto", GPTPROTO_MODEL: "gemini-4-hydrogen",
     GPTPROTO_API_KEY: "test-key", GPTPROTO_BASE_URL: baseUrl,
+    VERCEL_AI_API_KEY: "test-vercel-key", VERCEL_AI_BASE_URL: baseUrl, AGENT_PROVIDER_ORDER: "vercel,gptproto",
     DEEPSEEK_API_KEY: "test-key", DEEPSEEK_BASE_URL: baseUrl,
     AGENT_EMBEDDING_LEXICAL_CONFIDENCE_THRESHOLD: "0", DATABASE_URL: "", ADMIN_PASSWORD: "", ADMIN_SESSION_SECRET: "",
   }, stdio: ["ignore", "pipe", "pipe"] });
@@ -54,10 +65,10 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
         if (match && match[1] !== "0") { clearTimeout(timer); resolve(`http://127.0.0.1:${match[1]}`); }
       });
     });
-    const chat = async () => {
+    const chat = async (provider = "gptproto", message = "今天有什么 AI 新闻吗？你怎么看？") => {
       const response = await fetch(`${apiUrl}/v1/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "今天有什么 AI 新闻吗？你怎么看？", provider: "gptproto", model: "gemini-4-hydrogen" }),
+        body: JSON.stringify({ message, provider, model: "gemini-4-hydrogen" }),
       });
       assert.equal(response.status, 200);
       return (await response.text()).split("\n").filter((line) => line.startsWith("data:"))
@@ -81,6 +92,36 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
     assert.ok(!emptyEvents.some((event) => event.type === "citation"));
     const secondModel = requests.filter((item) => item.path.startsWith("/v1beta/models/")).at(-1);
     assert.ok(secondModel.body.tools.some((tool: any) => tool.google_search || tool.googleSearch));
+
+    searchHasResults = true;
+    const gatewayEvents = await chat("auto");
+    assert.ok(gatewayEvents.some((event) => event.type === "status" && event.provider === "vercel"));
+    const gatewayModel = requests.filter((item) => item.path === "/v1/chat/completions").at(-1);
+    assert.equal(gatewayModel.body.model, "google/gemini-4-hydrogen");
+    assert.match(gatewayModel.body.messages[0].content, /Search 返回的独有事实/u);
+
+    vercelFails = true;
+    const before = requests.length;
+    const fallbackEvents = await chat("auto");
+    const attempts = requests.slice(before);
+    assert.equal(attempts.filter((item) => item.path === "/v1/tools/search").length, 1);
+    assert.ok(attempts.some((item) => item.path === "/v1/chat/completions"));
+    assert.ok(attempts.some((item) => item.path.startsWith("/v1beta/models/")));
+    assert.equal(fallbackEvents.filter((event) => event.type === "citation").length, 1);
+    assert.equal(fallbackEvents.filter((event) => event.type === "done").length, 1);
+    assert.equal(fallbackEvents.filter((event) => event.type === "delta").map((event) => event.text).join(""), "示例产品发布了功能 X。来源：https://example.com/release");
+    assert.equal(fallbackEvents.filter((event) => event.type === "status").at(-1).provider, "gptproto");
+    assert.ok(!fallbackEvents.some((event) => event.type === "error"));
+
+    vercelFails = false;
+    const beforeRead = requests.length;
+    const pageEvents = await chat("auto", "概括 https://example.com/page");
+    const pageRequests = requests.slice(beforeRead);
+    assert.equal(pageRequests.filter((item) => item.path === "/v1/tools/fetch").length, 1);
+    assert.equal(pageRequests.filter((item) => item.path === "/v1/tools/search").length, 0);
+    assert.match(pageRequests.find((item) => item.path === "/v1/chat/completions")!.body.messages[0].content, /PAGEONLYFACT/u);
+    assert.ok(pageEvents.some((event) => event.type === "citation" && event.url === "https://example.com/page"));
+    assert.ok(!pageEvents.some((event) => event.type === "error"));
   } finally {
     child.kill("SIGTERM");
     gateway.closeAllConnections();

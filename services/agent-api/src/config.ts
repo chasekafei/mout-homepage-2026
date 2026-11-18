@@ -1,4 +1,5 @@
-export type ProviderName = "gptproto" | "deepseek";
+import type { AgentProvider, AgentProviderPreference } from "@mout/agent-core";
+export type ProviderName = AgentProvider;
 
 const csv = (value: string | undefined, fallback: string[]) =>
   (value ? value.split(",") : fallback).map((item) => item.trim()).filter(Boolean);
@@ -10,7 +11,10 @@ const duration = (value: string | undefined, fallback: number) => {
 export const config = {
   port: Number(process.env.PORT || 8787),
   allowedOrigins: csv(process.env.ALLOWED_ORIGINS, ["http://localhost:5173", "http://localhost:5174"]),
-  defaultProvider: (process.env.DEFAULT_PROVIDER || "gptproto") as ProviderName,
+  defaultProvider: (process.env.DEFAULT_PROVIDER || "auto") as AgentProviderPreference,
+  providerOrder: csv(process.env.AGENT_PROVIDER_ORDER, ["vercel", "gptproto"])
+    .filter((name): name is "vercel" | "gptproto" => name === "vercel" || name === "gptproto"),
+  providerFirstTokenTimeoutMs: duration(process.env.UPSTREAM_FIRST_TOKEN_TIMEOUT_MS, 120_000),
   timeZone: process.env.AGENT_TIMEZONE || "Asia/Shanghai",
   databaseUrl: process.env.DATABASE_URL || "",
   adminPassword: process.env.ADMIN_PASSWORD || "",
@@ -20,6 +24,11 @@ export const config = {
     baseUrl: process.env.GPTPROTO_BASE_URL || "https://gptproto.com/v1",
     model: process.env.GPTPROTO_MODEL || "gemini-4-hydrogen",
     webSearchTool: process.env.GPTPROTO_WEB_SEARCH_TOOL || "web_search_preview",
+  },
+  vercel: {
+    apiKey: process.env.VERCEL_AI_API_KEY || process.env.AI_GATEWAY_API_KEY || "",
+    baseUrl: process.env.VERCEL_AI_BASE_URL || "https://ai-gateway.vercel.sh/v1",
+    model: process.env.GPTPROTO_MODEL || "gemini-4-hydrogen",
   },
   embeddings: {
     apiKey: process.env.GPTPROTO_API_KEY || "",

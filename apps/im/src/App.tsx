@@ -30,6 +30,15 @@ const CONVERSATIONS_KEY = "mout.im.conversations.v1";
 const MODEL_SELECTION_KEY = "mout.im.model.v1";
 const MODEL_LABELS = new Map<string, string>(AGENT_CHAT_MODELS.map((model) => [model.id, model.label]));
 MODEL_LABELS.set("deepseek-flash", "DeepSeek Flash");
+const PROVIDER_LABELS = new Map<string, string>([
+  ["auto", "自动"], ["vercel", "Vercel"], ["gptproto", "GPTProto"], ["deepseek", "DeepSeek 官方"],
+]);
+
+function messageModelLabel(model: string, provider?: string): string {
+  const label = MODEL_LABELS.get(model) ?? model;
+  return provider ? `${label} · ${PROVIDER_LABELS.get(provider) ?? provider}` : label;
+}
+
 const MAX_STORED_MESSAGES = 256;
 const MAX_CONVERSATIONS = 12;
 const ACTIVE_STORAGE_BUDGET = 116_000;
@@ -487,7 +496,7 @@ export function App() {
                   <article className={`message message-${message.role}`} key={message.id}>
                     {message.role === "assistant" ? <AssistantMark small /> : <span className="user-mark">你</span>}
                     <div className="message-body">
-                      <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time>{message.role === "assistant" && message.model && <span className="message-model" title={message.model}>{MODEL_LABELS.get(message.model) ?? message.model}</span>}</div>
+                      <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time>{message.role === "assistant" && message.model && <span className="message-model" title={[message.model, message.provider].filter(Boolean).join(" · ")}>{messageModelLabel(message.model, message.provider)}</span>}</div>
                       {message.role === "assistant" && message.pending && !message.content
                         ? searching || reading ? <div className="searching-state"><span className="searching-pulse" /><span>{reading ? "正在阅读网页" : "正在查找公开资料"}</span></div> : <div className="thinking-state">思考中...<span className="thinking-dots" aria-hidden>···</span></div>
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
