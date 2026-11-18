@@ -1,6 +1,7 @@
 import type { ChatMessage, ProviderEvent, ProviderRequest } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
 import { normalizeDeepSeekToolCalls, parseDeepSeekWebChunk } from "./deepseek-web.js";
+import { geminiRequestBody, geminiStreamUrl, parseGeminiChunk, usesNativeGemini } from "./gemini.js";
 
 type ProviderConfig = { apiKey: string; baseUrl: string; model: string; webSearchTool?: string };
 
@@ -42,11 +43,12 @@ function textFromUnknown(value: unknown): string | undefined {
   return undefined;
 }
 
-function parseSseBlock(block: string, includeDeepSeekTools = false): ProviderEvent[] {
+function parseSseBlock(block: string, includeDeepSeekTools = false, nativeGemini = false): ProviderEvent[] {
   const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n").trim();
   if (!data || data === "[DONE]") return data === "[DONE]" ? [{ type: "done" }] : [];
   try {
     const payload = JSON.parse(data) as Record<string, any>;
+    if (nativeGemini) return parseGeminiChunk(payload);
     if (payload.error) return [{ type: "error", message: String(payload.error.message || payload.error) }];
     const events = includeDeepSeekTools ? parseDeepSeekWebChunk(payload) : [];
     const annotation = payload.annotation ?? payload.url_citation ?? payload.response?.annotation;
@@ -103,7 +105,7 @@ async function readWithIdleTimeout(
   });
 }
 
-async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number, includeDeepSeekTools: boolean): AsyncGenerator<ProviderEvent> {
+async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number, includeDeepSeekTools: boolean, nativeGemini: boolean): AsyncGenerator<ProviderEvent> {
   if (!response.body) throw new Error("上游没有返回流");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -115,7 +117,7 @@ async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: nu
     const blocks = buffer.split(/\r?\n\r?\n+/);
     buffer = blocks.pop() || "";
     for (const block of blocks) {
-      for (const event of parseSseBlock(block, includeDeepSeekTools)) {
+      for (const event of parseSseBlock(block, includeDeepSeekTools, nativeGemini)) {
         if (event.type === "citation") {
           if (citations.has(event.url)) continue;
           citations.add(event.url);
@@ -125,7 +127,7 @@ async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: nu
     }
     if (done) break;
   }
-  for (const event of parseSseBlock(buffer, includeDeepSeekTools)) {
+  for (const event of parseSseBlock(buffer, includeDeepSeekTools, nativeGemini)) {
     if (event.type === "citation" && citations.has(event.url)) continue;
     yield event;
   }
@@ -150,15 +152,17 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
     return;
   }
 
-  const useResponses = name === "gptproto" && request.useWebSearch;
+  const nativeGemini = name === "gptproto" && usesNativeGemini(request.model);
+  const useResponses = name === "gptproto" && request.useWebSearch && !nativeGemini;
   const useDeepSeekTools = name === "deepseek" && supportsDeepSeekWebTools(request.model);
   if (name === "deepseek" && !useDeepSeekTools && (request.useWebSearch || request.useReadUrl)) {
     yield { type: "error", message: "DeepSeek 托管搜索与链接阅读需要 deepseek-flash 模型" };
     return;
   }
   const baseUrl = provider.baseUrl.replace(/\/+$/u, "");
-  const url = useResponses ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
-  const body = useResponses
+  const url = nativeGemini ? geminiStreamUrl(baseUrl, request.model)
+    : useResponses ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
+  const body = nativeGemini ? geminiRequestBody(request) : useResponses
     ? {
         model: request.model,
         stream: true,
@@ -204,9 +208,10 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
     controller.abort();
   }, config.upstreamStreamTimeoutMs);
   try {
-    yield { type: "status", value: useResponses ? "searching" : "answering", provider: name, model: request.model };
-    let answering = true;
-    for await (const event of parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs, useDeepSeekTools)) {
+    const initialStatus = nativeGemini && request.useReadUrl ? "reading" : useResponses || (nativeGemini && request.useWebSearch) ? "searching" : "answering";
+    yield { type: "status", value: initialStatus, provider: name, model: request.model };
+    let answering = initialStatus === "answering";
+    for await (const event of parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs, useDeepSeekTools, nativeGemini)) {
       if (event.type === "status") answering = event.value === "answering";
       if (event.type === "delta" && !answering) {
         yield { type: "status", value: "answering", provider: name, model: request.model };

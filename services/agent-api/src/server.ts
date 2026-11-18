@@ -23,6 +23,7 @@ import {
 import { config, type ProviderName } from "./config.js";
 import { providerModel, sseEvent, streamProvider, supportsDeepSeekWebTools } from "./provider.js";
 import { normalizeDeepSeekToolCalls } from "./deepseek-web.js";
+import { usesNativeGemini } from "./gemini.js";
 import { createEmbeddingsWithRetry, loadEmbeddingIndex, rankSemanticCandidates, type EmbeddingIndex } from "./embeddings.js";
 import {
   archiveEnabled,
@@ -166,8 +167,11 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   const provider = input.provider || config.defaultProvider;
   const conversationId = input.conversationId || randomUUID();
   const search = shouldSearch(input.message);
-  const readUrl = provider === "deepseek" && /https?:\/\/[^\s<>]+/iu.test(input.message);
+  const readUrl = (provider === "deepseek" || (provider === "gptproto" && usesNativeGemini(input.model || config.gptproto.model)))
+    && /https?:\/\/[^\s<>]+/iu.test(input.message);
   const model = providerModel(provider, input.model, { useWebSearch: search, useReadUrl: readUrl, history: input.history });
+  const protocol = provider === "gptproto" && usesNativeGemini(model) ? "gemini"
+    : provider === "gptproto" && search ? "responses" : "chat-completions";
   const retrievalQueries = [
     input.message,
     ...(input.history ?? []).filter((message) => message.role === "user").slice(-2).map((message) => message.content),
@@ -181,7 +185,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   const requestStartedAt = Date.now();
   const elapsed = () => `${Date.now() - requestStartedAt}ms`;
   const logPrefix = `[chat ${requestId.slice(0, 8)} conv=${conversationId.slice(0, 8)}]`;
-  console.info(`${logPrefix} start provider=${provider} model=${model} semantic=${semanticCandidate} webSearch=${search} readUrl=${readUrl} history=${input.history?.length ?? 0}`);
+  console.info(`${logPrefix} start provider=${provider} model=${model} protocol=${protocol} semantic=${semanticCandidate} webSearch=${search} readUrl=${readUrl} history=${input.history?.length ?? 0}`);
   res.on("close", () => {
     if (!res.writableEnded) console.warn(`${logPrefix} client disconnected after ${elapsed()}`);
   });

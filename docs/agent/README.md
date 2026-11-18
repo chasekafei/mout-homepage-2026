@@ -47,6 +47,8 @@ ALLOWED_ORIGINS=https://mout.me,https://www.mout.me,https://im.mout.me,http://lo
 
 选择器随每次请求显式发送 provider 和 model，因此不会被 Railway 的默认 provider 覆盖；不需要为每个模型添加环境变量。GPT Proto 的六个模型共用 `GPTPROTO_API_KEY`，DeepSeek 使用 `DEEPSEEK_API_KEY`。未显式选择模型的入口（例如首页）沿用服务端环境变量，代码默认 `DEFAULT_PROVIDER=gptproto`、`GPTPROTO_MODEL=gemini-3.8-flash`。embedding 仍使用 GPT Proto 的 `text-embedding-3-large`。
 
+Gemini 4 Hydrogen 与 Argon 使用 GPTProto 的原生 Gemini 流式接口 `/v1beta/models/{model}:streamGenerateContent?alt=sse`，将人格和个人资料传入 `systemInstruction`，将完整对话转换成 `contents`（`user` / `model`）。这是针对 Chat Completions 路由实测返回 `GenerateContentRequest.contents: contents is not specified` 的协议适配；模型 ID 和 API Key 沿用选择器配置，不切换模型。正文、来源和结束事件转换回现有 SSE 契约，思考片段不会显示为回答。需要搜索或阅读链接时，分别使用原生 `google_search`、`url_context` 工具。其他 GPTProto 模型继续使用现有 OpenAI 兼容协议。
+
 DeepSeek V4 Pro 保留原有官方工具路径：需要实时搜索、用户提供网页链接或继续追问已读网页时，该轮使用支持官方托管工具的 `deepseek-flash`，同时声明 `deepseek_web_search` 和 `deepseek_read_url`。具体是否搜索或阅读由模型判断；回复上的模型标签和日志会标明实际模型。两种模型都携带相同的分身人格、个人资料和对话历史，并显式设置 `thinking: { type: "disabled" }`。
 
 如果希望未选择模型的入口也默认使用 DeepSeek，可在 Railway 设置：

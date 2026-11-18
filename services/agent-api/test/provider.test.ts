@@ -4,6 +4,7 @@ import type { ProviderRequest } from "@mout/agent-core";
 import { config } from "../src/config.js";
 import { providerModel, streamProvider } from "../src/provider.js";
 import { AGENT_CHAT_MODELS, isAgentChatModelId } from "../../../packages/agent-core/src/models.js";
+import { usesNativeGemini } from "../src/gemini.js";
 
 test("provider reports a response-header timeout separately", async () => {
   const originalFetch = globalThis.fetch;
@@ -182,7 +183,11 @@ test("picker models retain their exact IDs and use their selected provider", asy
   const captured: Array<{ host: string; model: string }> = [];
   globalThis.fetch = async (input, init) => {
     const body = JSON.parse(String(init?.body));
-    captured.push({ host: new URL(String(input)).host, model: body.model });
+    const url = new URL(String(input));
+    const model = url.pathname.includes(":streamGenerateContent")
+      ? decodeURIComponent(url.pathname.split("/").at(-1)!.split(":")[0]) : body.model;
+    captured.push({ host: url.host, model });
+    if (usesNativeGemini(model)) return new Response('data: {"candidates":[{"content":{"parts":[{"text":"你好。"}]},"finishReason":"STOP"}]}\n\n');
     return new Response('data: {"choices":[{"delta":{"content":"你好。"}}]}\n\ndata: [DONE]\n\n');
   };
   try {
@@ -207,5 +212,47 @@ test("picker models retain their exact IDs and use their selected provider", asy
     globalThis.fetch = originalFetch;
     config.gptproto.apiKey = originalGptProtoKey;
     config.deepseek.apiKey = originalDeepSeekKey;
+  }
+});
+
+test("Gemini 4 native transport retains the persona, history and sources across SSE byte boundaries", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = config.gptproto.apiKey;
+  config.gptproto.apiKey = "test-key";
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), `${config.gptproto.baseUrl.replace(/\/v1\/?$/u, "")}/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse`);
+    const body = JSON.parse(String(init?.body));
+    assert.deepEqual(body.systemInstruction, { parts: [{ text: "把访客当朋友，用第一人称自然聊天。" }] });
+    assert.deepEqual(body.contents.map((item: { role: string }) => item.role), ["user", "model", "user"]);
+    assert.equal(body.contents[2].parts[0].text, "那现在呢？");
+    assert.deepEqual(body.tools, [{ google_search: {} }, { url_context: {} }]);
+    assert.equal(body.messages, undefined);
+    const chunks = [
+      { candidates: [{ content: { parts: [{ thought: true, text: "内部思考" }, { text: "你好，" }] } }] },
+      { candidates: [{ content: { parts: [{ text: "很高兴认识你。" }] }, groundingMetadata: { groundingChunks: [{ web: { uri: "https://example.com/", title: "来源" } }] }, finishReason: "STOP" }], usageMetadata: { totalTokenCount: 30 } },
+    ];
+    const bytes = new TextEncoder().encode(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join(""));
+    return new Response(new ReadableStream({ start(controller) {
+      for (let i = 0; i < bytes.length; i += 11) controller.enqueue(bytes.slice(i, i + 11));
+      controller.close();
+    } }));
+  };
+  try {
+    const events = [];
+    for await (const event of streamProvider("gptproto", {
+      model: "gemini-4-argon", stream: true, useWebSearch: true, useReadUrl: true,
+      messages: [
+        { role: "system", content: "把访客当朋友，用第一人称自然聊天。" },
+        { role: "user", content: "你好" }, { role: "assistant", content: "你好！" }, { role: "user", content: "那现在呢？" },
+      ],
+    })) events.push(event);
+    assert.equal(events.filter((event) => event.type === "delta").map((event) => event.text).join(""), "你好，很高兴认识你。");
+    assert.ok(events.some((event) => event.type === "citation" && event.url === "https://example.com/"));
+    assert.ok(events.some((event) => event.type === "status" && event.value === "reading"));
+    assert.ok(events.some((event) => event.type === "done" && event.usage?.totalTokens === 30));
+    assert.ok(!events.some((event) => event.type === "error"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    config.gptproto.apiKey = originalKey;
   }
 });
