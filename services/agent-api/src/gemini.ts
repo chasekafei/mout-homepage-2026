@@ -28,6 +28,30 @@ export function geminiRequestBody(request: ProviderRequest) {
   };
 }
 
+function searchEvidence(data: Record<string, any>, candidate: Record<string, any> | undefined): ProviderEvent | undefined {
+  const metadata = candidate?.groundingMetadata;
+  const metadataPresent = Boolean(metadata) && typeof metadata === "object" && !Array.isArray(metadata);
+  const tokens = data.usageMetadata?.toolUsePromptTokenCount;
+  const toolUsePromptTokens = typeof tokens === "number" && Number.isFinite(tokens) && tokens >= 0 ? tokens : undefined;
+  if (!metadataPresent && toolUsePromptTokens === undefined) return undefined;
+  const queries: string[] = Array.isArray(metadata?.webSearchQueries)
+    ? metadata.webSearchQueries.filter((value: unknown): value is string => typeof value === "string" && Boolean(value.trim())) : [];
+  const sourceUrls: string[] = [];
+  for (const chunk of Array.isArray(metadata?.groundingChunks) ? metadata.groundingChunks : []) {
+    if (typeof chunk?.web?.uri !== "string") continue;
+    try {
+      const url = new URL(chunk.web.uri);
+      if (url.protocol === "http:" || url.protocol === "https:") sourceUrls.push(url.href);
+    } catch { /* Malformed URLs cannot establish search evidence. */ }
+  }
+  return {
+    type: "search_evidence", metadataPresent, queries, sourceUrls,
+    supportCount: Array.isArray(metadata?.groundingSupports) ? metadata.groundingSupports.length : 0,
+    hasSearchEntryPoint: Boolean(metadata?.searchEntryPoint),
+    ...(toolUsePromptTokens === undefined ? {} : { toolUsePromptTokens }),
+  };
+}
+
 /** Decode Gemini SSE without turning thought parts into visible assistant text. */
 export function parseGeminiChunk(payload: unknown): ProviderEvent[] {
   if (Array.isArray(payload)) return payload.flatMap(parseGeminiChunk);
@@ -36,7 +60,8 @@ export function parseGeminiChunk(payload: unknown): ProviderEvent[] {
   if (data.error) return [{ type: "error", message: String(data.error.message || data.error) }];
   if (data.promptFeedback?.blockReason) return [{ type: "error", message: `上游未生成回答：${data.promptFeedback.blockReason}` }];
   const candidate = data.candidates?.[0];
-  if (!candidate) return [];
+  const evidence = searchEvidence(data, candidate);
+  if (!candidate) return evidence ? [evidence] : [];
   if (["SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"].includes(candidate.finishReason)) {
     return [{ type: "error", message: `上游未完成回答：${candidate.finishReason}` }];
   }
@@ -54,6 +79,7 @@ export function parseGeminiChunk(payload: unknown): ProviderEvent[] {
       }
     } catch { /* Ignore malformed source URLs. */ }
   }
+  if (evidence) events.push(evidence);
   if (candidate.finishReason === "MAX_TOKENS") events.push({ type: "error", message: "回答达到模型输出上限，内容尚未完整。" });
   else if (candidate.finishReason === "STOP") {
     const usage = data.usageMetadata;

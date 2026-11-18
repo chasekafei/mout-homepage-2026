@@ -82,6 +82,7 @@ test("native chunks expose final text without thought parts and retain safe grou
     { type: "delta", text: "很高兴认识你。" },
     { type: "citation", title: "文章", url: "https://example.com/article" },
     { type: "citation", title: "http://example.com/reference", url: "http://example.com/reference" },
+    { type: "search_evidence", metadataPresent: true, queries: [], sourceUrls: ["https://example.com/article"], supportCount: 0, hasSearchEntryPoint: false },
     { type: "done", usage: { promptTokens: 20, completionTokens: 7, totalTokens: 27 } },
   ]);
 });
@@ -113,4 +114,21 @@ test("native array payloads preserve chunk order and empty provider frames stay 
   for (const payload of [null, {}, { candidates: [] }, { candidates: [{}] }]) {
     assert.deepEqual(parseGeminiChunk(payload), []);
   }
+});
+
+test("grounding evidence distinguishes omitted metadata, empty metadata, partial sources and generic tool usage", () => {
+  assert.deepEqual(parseGeminiChunk({ candidates: [{}] }), []);
+  assert.deepEqual(parseGeminiChunk({ candidates: [{ groundingMetadata: {} }] }), [{
+    type: "search_evidence", metadataPresent: true, queries: [], sourceUrls: [], supportCount: 0, hasSearchEntryPoint: false,
+  }]);
+  assert.deepEqual(parseGeminiChunk({ candidates: [], usageMetadata: { toolUsePromptTokenCount: 12 } }), [{
+    type: "search_evidence", metadataPresent: false, queries: [], sourceUrls: [], supportCount: 0, hasSearchEntryPoint: false, toolUsePromptTokens: 12,
+  }]);
+  const events = parseGeminiChunk({ candidates: [{ groundingMetadata: {
+    webSearchQueries: ["AI releases today", "", null],
+    groundingChunks: [{ web: { uri: "https://example.com/news" } }],
+    groundingSupports: [{ groundingChunkIndices: [0] }], searchEntryPoint: { renderedContent: "search" },
+  } }] });
+  assert.ok(events.some((event) => event.type === "search_evidence" && event.queries.length === 1
+    && event.sourceUrls[0] === "https://example.com/news" && event.supportCount === 1 && event.hasSearchEntryPoint));
 });

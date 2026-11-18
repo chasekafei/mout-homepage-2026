@@ -10,7 +10,7 @@ export const AGENT_CHAT_MODELS = [
 ] as const;
 
 export type AgentChatModelId = typeof AGENT_CHAT_MODELS[number]["id"];
-export const DEFAULT_AGENT_CHAT_MODEL: AgentChatModelId = "gemini-3.8-flash";
+export const DEFAULT_AGENT_CHAT_MODEL: AgentChatModelId = "gemini-4-hydrogen";
 
 export function isAgentChatModelId(value: unknown): value is AgentChatModelId {
   return typeof value === "string" && AGENT_CHAT_MODELS.some((model) => model.id === value);

@@ -399,7 +399,9 @@ export function App() {
             : message));
         }
         if (event.type === "tool_error") {
-          setToolWarning(event.tool === "deepseek_read_url"
+          setToolWarning(event.code === "search_evidence_unavailable"
+            ? "本轮未收到可核验的实时来源，回答中的最新信息尚未核实。"
+            : event.tool === "deepseek_read_url"
             ? "网页暂时无法读取，这次回答可能缺少该网页的信息。"
             : "搜索暂时不可用，最新信息可能不完整。");
         }

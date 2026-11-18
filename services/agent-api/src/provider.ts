@@ -211,13 +211,20 @@ export async function* streamProvider(name: ProviderName, request: ProviderReque
     const initialStatus = nativeGemini && request.useReadUrl ? "reading" : useResponses || (nativeGemini && request.useWebSearch) ? "searching" : "answering";
     yield { type: "status", value: initialStatus, provider: name, model: request.model };
     let answering = initialStatus === "answering";
+    let hasWebSources = false;
+    let upstreamFailed = false;
     for await (const event of parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs, useDeepSeekTools, nativeGemini)) {
+      if (event.type === "search_evidence" && event.sourceUrls.length) hasWebSources = true;
+      if (event.type === "error") upstreamFailed = true;
       if (event.type === "status") answering = event.value === "answering";
       if (event.type === "delta" && !answering) {
         yield { type: "status", value: "answering", provider: name, model: request.model };
         answering = true;
       }
       yield event;
+    }
+    if (nativeGemini && request.useWebSearch && !hasWebSources && !upstreamFailed) {
+      yield { type: "tool_error", tool: "google_search", code: "search_evidence_unavailable" };
     }
   } catch (error) {
     const message = totalTimedOut

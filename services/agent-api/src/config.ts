@@ -18,7 +18,7 @@ export const config = {
   gptproto: {
     apiKey: process.env.GPTPROTO_API_KEY || "",
     baseUrl: process.env.GPTPROTO_BASE_URL || "https://gptproto.com/v1",
-    model: process.env.GPTPROTO_MODEL || "gemini-3.8-flash",
+    model: process.env.GPTPROTO_MODEL || "gemini-4-hydrogen",
     webSearchTool: process.env.GPTPROTO_WEB_SEARCH_TOOL || "web_search_preview",
   },
   embeddings: {

@@ -72,6 +72,7 @@ export type ProviderEvent =
   | { type: "status"; value: "searching" | "reading" | "answering"; provider?: "gptproto" | "deepseek"; model?: string }
   | { type: "provider_context"; deepseekToolCalls: DeepSeekToolStep[] }
   | { type: "tool_error"; tool: string; code: string }
+  | { type: "search_evidence"; metadataPresent: boolean; queries: string[]; sourceUrls: string[]; supportCount: number; hasSearchEntryPoint: boolean; toolUsePromptTokens?: number }
   | { type: "archive_warning"; message: string }
   | { type: "done"; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }
   | { type: "error"; message: string };

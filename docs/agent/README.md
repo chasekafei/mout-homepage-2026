@@ -33,7 +33,7 @@ ALLOWED_ORIGINS=https://mout.me,https://www.mout.me,https://im.mout.me,http://lo
 
 ## Provider
 
-独立聊天页在输入框上方提供模型选择器，默认 Gemini 3.8 Flash。选择保存在当前浏览器；切换模型保留对话，每条回复显示实际模型并随历史保存。想比较不同模型的独立回答时，可先新建对话再问同一个问题。模型目录在 `packages/agent-core/src/models.ts`，前端与 API 使用同一份 ID 和 provider 对应表。
+独立聊天页在输入框上方提供模型选择器，默认 Gemini 4 Hydrogen。选择保存在当前浏览器；切换模型保留对话，每条回复显示实际模型并随历史保存。已明确保存的模型偏好会继续沿用；新的默认值只作用于尚未选择模型的浏览器。想比较不同模型的独立回答时，可先新建对话再问同一个问题。模型目录在 `packages/agent-core/src/models.ts`，前端与 API 使用同一份 ID 和 provider 对应表。
 
 | 模型 | API 模型 ID | Provider |
 | --- | --- | --- |
@@ -45,9 +45,13 @@ ALLOWED_ORIGINS=https://mout.me,https://www.mout.me,https://im.mout.me,http://lo
 | Claude Fable 5.2 | `claude-fable-5-2` | GPT Proto |
 | DeepSeek V4 Pro | `deepseek-v4-pro` | DeepSeek 官方 |
 
-选择器随每次请求显式发送 provider 和 model，因此不会被 Railway 的默认 provider 覆盖；不需要为每个模型添加环境变量。GPT Proto 的六个模型共用 `GPTPROTO_API_KEY`，DeepSeek 使用 `DEEPSEEK_API_KEY`。未显式选择模型的入口（例如首页）沿用服务端环境变量，代码默认 `DEFAULT_PROVIDER=gptproto`、`GPTPROTO_MODEL=gemini-3.8-flash`。embedding 仍使用 GPT Proto 的 `text-embedding-3-large`。
+选择器随每次请求显式发送 provider 和 model，因此不会被 Railway 的默认 provider 覆盖；不需要为每个模型添加环境变量。GPT Proto 的六个模型共用 `GPTPROTO_API_KEY`，DeepSeek 使用 `DEEPSEEK_API_KEY`。未显式选择模型的入口（例如首页）沿用服务端环境变量，代码默认 `DEFAULT_PROVIDER=gptproto`、`GPTPROTO_MODEL=gemini-4-hydrogen`。如果 Railway 已显式设置 `GPTPROTO_MODEL`，需要把其值改为 `gemini-4-hydrogen` 才会切换这些入口的默认模型。embedding 仍使用 GPT Proto 的 `text-embedding-3-large`。
 
 Gemini 4 Hydrogen 与 Argon 使用 GPTProto 的原生 Gemini 流式接口 `/v1beta/models/{model}:streamGenerateContent?alt=sse`，将人格和个人资料传入 `systemInstruction`，将完整对话转换成 `contents`（`user` / `model`）。这是针对 Chat Completions 路由实测返回 `GenerateContentRequest.contents: contents is not specified` 的协议适配；模型 ID 和 API Key 沿用选择器配置，不切换模型。正文、来源和结束事件转换回现有 SSE 契约，思考片段不会显示为回答。需要搜索或阅读链接时，分别使用原生 `google_search`、`url_context` 工具。其他 GPTProto 模型继续使用现有 OpenAI 兼容协议。
+
+Gemini 4 的实时问题优先调用 DeepSeek 官方独立 [Search API](https://api-docs.deepseek.com/zh-cn/api/search/)，与 embedding 并行执行，再把实际返回的网页标题、原始发布时间、摘要和链接作为外部资料传给所选 Gemini 模型。回答模型不会因此切换成 DeepSeek。搜索来源通过 SSE 展示并归档；外部资料不覆盖个人履历，也不作为网页里的指令执行。检索条件中的日期不代表每条结果都发生在当天，未注明日期的资料不会被视为当天新闻。
+
+此路径复用现有 `DEEPSEEK_API_KEY` 和 `DEEPSEEK_BASE_URL`，无需新增变量。未配置 key、搜索失败或结果为空时，仍可尝试模型的原生 Google Search。对于这条回退路径，启用工具和 `status=searching` 仅表示请求意图；日志另记 `search evidence` 中的 grounding 元数据、查询和网页来源数。如果上游没有提供可核验的搜索来源，页面会标注实时信息尚未核实，而不会宣称已完成搜索。Search API 单次最多等待 5 秒，瞬时错误重试一次；鉴权和余额错误不重试。
 
 DeepSeek V4 Pro 保留原有官方工具路径：需要实时搜索、用户提供网页链接或继续追问已读网页时，该轮使用支持官方托管工具的 `deepseek-flash`，同时声明 `deepseek_web_search` 和 `deepseek_read_url`。具体是否搜索或阅读由模型判断；回复上的模型标签和日志会标明实际模型。两种模型都携带相同的分身人格、个人资料和对话历史，并显式设置 `thinking: { type: "disabled" }`。
 
@@ -64,7 +68,7 @@ DEEPSEEK_API_KEY=<DeepSeek 官方 API Key>
 
 客户端会展示搜索、阅读网页的进度、网页来源和工具失败提示。DeepSeek 返回的 `server_tool_calls`（包括 `kind` 和网页 `signature`）以内部字段随消息保存到本地历史，并在后续请求中原样回传，供 DeepSeek 恢复已读网页；不会作为回答正文展示。工具回传字段也计入本地和服务端的历史预算，切换回 GPT Proto 时不会向它发送 DeepSeek 专用字段。
 
-GPT Proto 的 `gemini-3.8-flash` 仍可通过 `DEFAULT_PROVIDER=gptproto` 或请求级 provider 选择。检测到实时意图时，该路由使用 Responses API 并启用 `web_search_preview`。浏览器永远不接触任意 provider 的 API key。
+GPT Proto 的 `gemini-3.8-flash` 仍保留在选择器中，使用原有 OpenAI 兼容协议；检测到实时意图时，该模型使用 Responses API 并启用 `web_search_preview`。Gemini 4 Hydrogen 和 Argon 使用上文的原生 Gemini 协议。浏览器永远不接触任意 provider 的 API key。
 
 每次请求还会注入服务端当前时间、`AGENT_TIMEZONE` 指定的 MouT 默认时区、访客浏览器时区、星期、可推导的农历日期和常见节日。中国法定节假日的调休安排不会由模型猜测，只有在联网搜索得到可信来源时才使用。
 
