@@ -493,8 +493,8 @@ export function App() {
               <section className="welcome-view">
                 <div className="welcome-orbit"><div className="orbit-line orbit-line-a" /><div className="orbit-line orbit-line-b" /><AssistantMark /></div>
                 <p className="welcome-kicker">MouT 的 AI 分身</p>
-                <h2>我是个大 i 人，<br /><span>要不你先开口？</span></h2>
-                <p className="welcome-intro">我会基于自己的经历和知识库回答。你可以问我做过什么，也可以问我为什么这样做。</p>
+                <h2>趁着本体不在，<br /><span>你有啥想问的不？</span></h2>
+                <p className="welcome-intro">我会不断完善本体的经历和知识库。你可以问我做过什么，也可以问我为什么这样做。</p>
                 <div className="quick-prompts">{QUICK_PROMPTS.map((prompt) => <button key={prompt.text} type="button" onClick={() => void send(prompt.text)}>{prompt.label}<Icon name="arrow" size={15} /></button>)}</div>
               </section>
             ) : (
@@ -506,7 +506,7 @@ export function App() {
                     <div className="message-body">
                       <div className="message-head"><strong>{message.role === "assistant" ? "MouT 的分身" : "你"}</strong><time>{timeLabel(message.createdAt)}</time>{message.role === "assistant" && message.model && <span className="message-model" title={message.model}>{MODEL_LABELS.get(message.model) ?? message.model}</span>}</div>
                       {message.role === "assistant" && message.pending && !message.content
-                        ? searching || reading ? <div className="searching-state"><span className="searching-pulse" /><span>{reading ? "正在阅读网页" : "正在查找公开资料"}</span></div> : <div className="thinking-state">i 人组织语言中<span className="thinking-dots" aria-hidden>···</span></div>
+                        ? searching || reading ? <div className="searching-state"><span className="searching-pulse" /><span>{reading ? "正在阅读网页" : "正在查找公开资料"}</span></div> : <div className="thinking-state">思考中...<span className="thinking-dots" aria-hidden>···</span></div>
                         : <MarkdownContent content={message.content} className={`message-markdown ${message.role === "user" ? "user-markdown" : ""}`} />}
                       {message.role === "assistant" && message.pending && message.content && <span className="stream-caret" />}
                       {message.role === "assistant" && !!message.sources?.length && <div className="message-sources">
