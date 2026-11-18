@@ -53,7 +53,7 @@ Railway 中新增 `VERCEL_AI_API_KEY`（沿用本地同名变量），将 `DEFAU
 
 每次供应商尝试的首正文等待默认最多 120 秒，可通过可选 `UPSTREAM_FIRST_TOKEN_TIMEOUT_MS` 调整。首段正文到达后停止该计时，继续使用原来的长流式预算；前端总截止时间为 10 分钟，为两次尝试及流式输出预留空间。客户端取消后不会再请求备用。日志中的 `provider attempt`、`provider fallback` 和 `provider complete provider=...` 可定位每一次切换。
 
-Gateway 的 Gemini 和 GPTProto 原生 Gemini 4 显式使用 `low` 思考强度，避免继承供应商默认值。可选 `AGENT_GEMINI_THINKING_LEVEL=medium` 或 `high` 可提高思考强度，无需配置时默认 `low`；这是思考深度设置，不是关闭思考或隐藏思考正文。两条 Gemini 4 路径保持同一强度，其他模型沿用各自设置。官方说明：[Gateway Google reasoning](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google)、[Hydrogen 开发指南](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen)。实际首字时间仍受上游排队和网络影响。
+Gateway 的 Gemini 和 GPTProto 原生 Gemini 4 显式使用 `medium` 思考强度，避免继承供应商默认值。可选 `AGENT_GEMINI_THINKING_LEVEL=low` 或 `high` 可降低或提高思考强度，无需配置时默认 `medium`；这是思考深度设置，不是关闭思考或隐藏思考正文。两条 Gemini 4 路径保持同一强度，其他模型沿用各自设置。官方说明：[Gateway Google reasoning](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google)、[Hydrogen 开发指南](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen)。实际首字时间仍受上游排队和网络影响。
 
 诊断日志按每次供应商尝试记录响应头耗时、首个流数据、首次收到推理片段的耗时、上游响应 ID 和实际返回的 token 用量（含 `reasoningTokens`）。`provider complete` 中 `headersMs`、`firstTokenMs` 从整条供应商链开始累计，`attemptHeadersMs`、`attemptFirstByteMs`、`attemptFirstReasoningMs` 从最终尝试开始计时；`upstreamId` 是该次尝试的响应 ID。没有返回的字段标记为未提供，不把它当成零；不记录推理正文，内部诊断事件不发给浏览器。Gateway 的 `gen_...` ID 可在其控制台或 [Generation Lookup](https://vercel.com/docs/ai-gateway/observability-and-spend/usage) 继续检查上游供应商和时延。首字前的等待仍可能同时包含网络、路由、排队和思考，日志不能单独证明每项所占时间。
 

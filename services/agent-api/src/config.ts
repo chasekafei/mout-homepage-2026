@@ -9,7 +9,7 @@ const duration = (value: string | undefined, fallback: number) => {
 };
 export type GeminiThinkingLevel = "low" | "medium" | "high";
 const thinkingLevel = (value: string | undefined): GeminiThinkingLevel =>
-  value === "medium" || value === "high" ? value : "low";
+  value === "low" || value === "high" ? value : "medium";
 
 export const config = {
   port: Number(process.env.PORT || 8787),
