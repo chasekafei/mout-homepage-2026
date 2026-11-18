@@ -3,6 +3,7 @@ import { AGENT_CHAT_MODELS, DEFAULT_AGENT_CHAT_MODEL, isAgentChatModelId, select
 import { AgentEvent, AgentMode, AgentSource, ChatMessage, isMockMode, streamChat, warmAgentBackend } from "./api";
 import { MarkdownContent } from "@mout/chat-ui";
 import "./styles.css";
+import { usePageBottomFollow } from "./usePageBottomFollow";
 
 type IconName = "arrow" | "back" | "book" | "chevron" | "close" | "external" | "globe" | "spark";
 
@@ -251,7 +252,7 @@ export function App() {
   const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
-  const followPageBottom = useRef(true);
+  usePageBottomFollow(activeConversation?.id, messages.length > 0);
 
   useEffect(() => { void warmAgentBackend(); }, []);
 
@@ -301,26 +302,6 @@ export function App() {
   useEffect(() => {
     if (activeConversation) setMode(activeConversation.mode);
   }, [activeConversation?.id]);
-
-  useEffect(() => {
-    const updateFollow = () => {
-      const root = document.documentElement;
-      followPageBottom.current = root.scrollHeight - (window.scrollY + window.innerHeight) < 180;
-    };
-    updateFollow();
-    window.addEventListener("scroll", updateFollow, { passive: true });
-    window.addEventListener("resize", updateFollow, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", updateFollow);
-      window.removeEventListener("resize", updateFollow);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!followPageBottom.current || messages.length === 0) return;
-    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" }));
-    return () => cancelAnimationFrame(frame);
-  }, [messages, searching, reading]);
 
   const changeMode = (nextMode: AgentMode) => {
     if (isStreaming) return;
@@ -495,7 +476,7 @@ export function App() {
               <section className="welcome-view">
                 <div className="welcome-orbit"><div className="orbit-line orbit-line-a" /><div className="orbit-line orbit-line-b" /><AssistantMark /></div>
                 <p className="welcome-kicker">MouT 的 AI 分身</p>
-                <h2>趁着本体不在，<br /><span>你有啥想问的不？</span></h2>
+                <h2>趁着本体不在，<br /><span>你有啥想聊的不？</span></h2>
                 <p className="welcome-intro">我会不断完善本体的经历和知识库。你可以问我做过什么，也可以问我为什么这样做。</p>
                 <div className="quick-prompts">{QUICK_PROMPTS.map((prompt) => <button key={prompt.text} type="button" onClick={() => void send(prompt.text)}>{prompt.label}<Icon name="arrow" size={15} /></button>)}</div>
               </section>
