@@ -20,7 +20,12 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
     if (req.url === "/v1/chat/completions") {
       if (vercelFails) { res.statusCode = 429; return res.end("overloaded"); }
       res.setHeader("Content-Type", "text/event-stream");
-      return res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: "来自 Vercel 的正文。" } }] })}\n\ndata: [DONE]\n\n`);
+      const frames = [
+        { id: "gen_gateway_diagnostic", choices: [{ delta: { reasoning: "不可下发的内部思考" } }] },
+        { id: "gen_gateway_diagnostic", choices: [{ delta: { content: "来自 Vercel 的正文。" }, finish_reason: "stop" }] },
+        { id: "gen_gateway_diagnostic", choices: [], usage: { prompt_tokens: 100, completion_tokens: 28, total_tokens: 128, completion_tokens_details: { reasoning_tokens: 20 } } },
+      ];
+      return res.end(frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n");
     }
     if (req.url === "/v1/tools/search") {
       res.setHeader("Content-Type", "application/json");
@@ -96,6 +101,10 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
     searchHasResults = true;
     const gatewayEvents = await chat("auto");
     assert.ok(gatewayEvents.some((event) => event.type === "status" && event.provider === "vercel"));
+    assert.ok(!gatewayEvents.some((event) => event.type === "provider_diagnostics"));
+    assert.ok(!JSON.stringify(gatewayEvents).includes("gen_gateway_diagnostic"));
+    assert.ok(!JSON.stringify(gatewayEvents).includes("不可下发的内部思考"));
+    assert.equal(gatewayEvents.find((event) => event.type === "done").usage.reasoningTokens, 20);
     const gatewayModel = requests.filter((item) => item.path === "/v1/chat/completions").at(-1);
     assert.equal(gatewayModel.body.model, "google/gemini-4-hydrogen");
     assert.match(gatewayModel.body.messages[0].content, /Search 返回的独有事实/u);
@@ -122,6 +131,9 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
     assert.match(pageRequests.find((item) => item.path === "/v1/chat/completions")!.body.messages[0].content, /PAGEONLYFACT/u);
     assert.ok(pageEvents.some((event) => event.type === "citation" && event.url === "https://example.com/page"));
     assert.ok(!pageEvents.some((event) => event.type === "error"));
+    assert.match(logs, /retrieval selected \[\{"id":/u);
+    assert.match(logs, /"responseId":"gen_gateway_diagnostic"/u);
+    assert.match(logs, /"reasoningTokens":20/u);
   } finally {
     child.kill("SIGTERM");
     gateway.closeAllConnections();

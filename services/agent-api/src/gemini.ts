@@ -1,4 +1,5 @@
 import type { ProviderEvent, ProviderRequest } from "@mout/agent-core";
+import { config } from "./config.js";
 
 /** These GPTProto routes currently require Gemini's native contents protocol. */
 export function usesNativeGemini(model: string): boolean {
@@ -24,6 +25,7 @@ export function geminiRequestBody(request: ProviderRequest) {
   return {
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents,
+    generationConfig: { thinkingConfig: { thinkingLevel: config.geminiThinkingLevel } },
     ...(tools.length ? { tools } : {}),
   };
 }
@@ -94,6 +96,7 @@ export function parseGeminiChunk(payload: unknown): ProviderEvent[] {
       promptTokens: usage.promptTokenCount,
       completionTokens: usage.candidatesTokenCount,
       totalTokens: usage.totalTokenCount,
+      ...(typeof usage.thoughtsTokenCount === "number" && Number.isSafeInteger(usage.thoughtsTokenCount) && usage.thoughtsTokenCount >= 0 ? { reasoningTokens: usage.thoughtsTokenCount } : {}),
     } } : {}) });
   } else if (candidate.finishReason) events.push({ type: "error", message: `上游未完成回答：${candidate.finishReason}` });
   return events;

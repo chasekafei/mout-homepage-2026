@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ProviderRequest } from "@mout/agent-core";
 import { VERCEL_MODEL_IDS, vercelModelId, vercelRequestBody } from "../src/vercel.js";
+import { config } from "../src/config.js";
 
 test("UI model IDs map to the exact official Gateway namespace and version", () => {
   const expected = [
@@ -53,7 +54,25 @@ test("Gateway requests preserve full conversation text and strip supplier-native
       { role: "user", content: "你还记得我叫什么吗？" },
     ],
     stream: true,
+    stream_options: { include_usage: true },
+    reasoning: { effort: config.geminiThinkingLevel },
   });
   assert.ok(!JSON.stringify(body).includes("deepseek-opaque-signature"));
   assert.equal(JSON.stringify(request), original);
+});
+
+test("configured Gemini thinking effort is sent consistently without changing other model families", () => {
+  const original = config.geminiThinkingLevel;
+  try {
+    for (const effort of ["low", "medium", "high"] as const) {
+      config.geminiThinkingLevel = effort;
+      for (const model of Object.keys(VERCEL_MODEL_IDS)) {
+        const body = vercelRequestBody({ model, messages: [{ role: "user", content: "你好" }], stream: true, useWebSearch: false });
+        assert.deepEqual(body.reasoning, model.startsWith("gemini-") ? { effort } : undefined);
+        assert.deepEqual(body.stream_options, { include_usage: true });
+      }
+    }
+  } finally {
+    config.geminiThinkingLevel = original;
+  }
 });

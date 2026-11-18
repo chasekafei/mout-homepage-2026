@@ -69,7 +69,7 @@ test("DeepSeek V4 Pro uses the official endpoint and streams final answers witho
     for await (const event of streamProvider("deepseek", {
       messages, model: "deepseek-v4-pro", stream: true, useWebSearch: false,
     })) events.push(event);
-    assert.deepEqual(events, [
+    assert.deepEqual(events.filter((event) => event.type !== "provider_diagnostics"), [
       { type: "provider_attempt", provider: "deepseek", model: "deepseek-v4-pro", attempt: 1 },
       { type: "status", value: "answering", provider: "deepseek", model: "deepseek-v4-pro" },
       { type: "delta", text: "你叫测试者。" },

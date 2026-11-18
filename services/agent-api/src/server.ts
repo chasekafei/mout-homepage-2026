@@ -290,6 +290,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   }
   const selectedFacts = retrieveFacts(retrievalQueries, facts, config.maxContextFacts, semanticScores);
   console.info(`${logPrefix} retrieval complete duration=${elapsed()} facts=${selectedFacts.length} semanticCandidates=${semanticScores.length}`);
+  console.info(`${logPrefix} retrieval selected ${JSON.stringify(selectedFacts.map((fact) => ({ id: fact.id, type: fact.recordType ?? "fact", ...(fact.sourceVersion ? { version: fact.sourceVersion } : {}), chars: fact.body.length })))}`);
   const [externalResults, externalPages] = await Promise.all([externalSearchPromise, externalPagesPromise]);
   const externalContext = externalResults.length ? webSearchContext(externalResults, externalSearchQuery) : "";
   const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext)
@@ -372,6 +373,12 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   let answerStatus: "complete" | "error" = "complete";
   const providerStartedAt = Date.now();
   let providerHeadersAt: number | null = null;
+  let attemptHeadersMs: number | undefined;
+  let firstByteMs: number | undefined;
+  let firstReasoningMs: number | undefined;
+  let upstreamResponseId: string | undefined;
+  let attempt = 0;
+  let providerUsage: Extract<import("@mout/agent-core").ProviderEvent, { type: "done" }>["usage"];
   let firstTokenAt: number | null = null;
   let groundingMetadataPresent = false;
   const searchQueries = new Set<string>();
@@ -384,12 +391,35 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     for await (const event of streamProvider(preference, { messages, model, stream: true, useWebSearch: search && !externalResults.length, useReadUrl: readUrl && !externalPages.length, signal: requestController.signal })) {
       if (event.type === "provider_attempt") {
         effectiveProvider = event.provider;
-        console.info(`${logPrefix} provider attempt=${event.attempt} provider=${event.provider} model=${event.model}`);
+        attempt = event.attempt;
+        providerHeadersAt = null;
+        attemptHeadersMs = firstByteMs = firstReasoningMs = undefined;
+        upstreamResponseId = undefined;
+        providerUsage = undefined;
+        const sendsThinkingLevel = event.provider === "gptproto" && usesNativeGemini(event.model)
+          || event.provider === "vercel" && event.model.startsWith("gemini-");
+        console.info(`${logPrefix} provider attempt=${event.attempt} provider=${event.provider} model=${event.model}${sendsThinkingLevel ? ` thinkingLevel=${config.geminiThinkingLevel}` : ""}`);
         continue;
       }
       if (event.type === "provider_fallback") {
         console.warn(`${logPrefix} provider fallback from=${event.from} to=${event.to} model=${event.model} reason=${event.code}`);
         if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "status", value: "answering", provider: event.to, model }));
+        continue;
+      }
+      if (event.type === "provider_diagnostics") {
+        if (event.headersMs !== undefined) {
+          providerHeadersAt = Date.now();
+          attemptHeadersMs = event.headersMs;
+          console.info(`${logPrefix} provider headers after ${providerHeadersAt - providerStartedAt}ms provider=${event.provider} attempt=${attempt} attemptMs=${event.headersMs} status=${event.httpStatus}`);
+        }
+        if (event.firstByteMs !== undefined) firstByteMs = event.firstByteMs;
+        if (event.firstReasoningMs !== undefined) firstReasoningMs = event.firstReasoningMs;
+        if (event.responseId) upstreamResponseId = event.responseId;
+        if (event.usage) providerUsage = { ...providerUsage, ...event.usage };
+        if (event.headersMs === undefined) {
+          const { type: _type, ...details } = event;
+          console.info(`${logPrefix} provider diagnostics attempt=${attempt} ${JSON.stringify(details)}`);
+        }
         continue;
       }
       if (event.type === "search_evidence") {
@@ -400,10 +430,6 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
         hasSearchEntryPoint ||= event.hasSearchEntryPoint;
         if (event.toolUsePromptTokens !== undefined) toolUsePromptTokens = event.toolUsePromptTokens;
         continue;
-      }
-      if (event.type === "status" && providerHeadersAt === null) {
-        providerHeadersAt = Date.now();
-        console.info(`${logPrefix} provider headers after ${providerHeadersAt - providerStartedAt}ms`);
       }
       if (event.type === "status" && event.provider) effectiveProvider = event.provider;
       if (event.type === "delta") {
@@ -427,6 +453,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
         answerStatus = "error";
         console.error(`${logPrefix} provider error after ${Date.now() - providerStartedAt}ms: ${event.message}`);
       }
+      if (event.type === "done" && event.usage) providerUsage = { ...providerUsage, ...event.usage };
       if (!res.destroyed && !res.writableEnded) res.write(sseEvent(event));
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
@@ -446,7 +473,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   } else if (search && provider !== "deepseek") {
     console.info(`${logPrefix} search evidence metadata=${groundingMetadataPresent} queries=${searchQueries.size} webSources=${searchSourceUrls.size} supportsReceived=${groundingSupportsReceived} searchEntryPoint=${hasSearchEntryPoint} toolUsePromptTokens=${toolUsePromptTokens ?? "omitted"}`);
   }
-  console.info(`${logPrefix} provider complete provider=${effectiveProvider} duration=${providerDuration}ms headersMs=${providerHeadersAt === null ? "none" : providerHeadersAt - providerStartedAt} firstTokenMs=${firstTokenAt === null ? "none" : firstTokenAt - providerStartedAt} status=${answerStatus} answerChars=${answer.length} total=${elapsed()}`);
+  console.info(`${logPrefix} provider complete provider=${effectiveProvider} duration=${providerDuration}ms headersMs=${providerHeadersAt === null ? "none" : providerHeadersAt - providerStartedAt} firstTokenMs=${firstTokenAt === null ? "none" : firstTokenAt - providerStartedAt} attemptHeadersMs=${attemptHeadersMs ?? "none"} attemptFirstByteMs=${firstByteMs ?? "none"} attemptFirstReasoningMs=${firstReasoningMs ?? "none"} upstreamId=${upstreamResponseId ?? "omitted"} usage=${providerUsage ? JSON.stringify(providerUsage) : "omitted"} status=${answerStatus} answerChars=${answer.length} total=${elapsed()}`);
 
   const archiveWaitStartedAt = Date.now();
   const archiveTurn = await archiveTurnPromise;

@@ -1,4 +1,5 @@
 import type { ProviderRequest } from "@mout/agent-core";
+import { config } from "./config.js";
 
 /** Verified AI Gateway IDs; keep UI IDs stable across suppliers. */
 export const VERCEL_MODEL_IDS = {
@@ -23,5 +24,7 @@ export function vercelRequestBody(request: ProviderRequest) {
     model: vercelModelId(request.model),
     messages: request.messages.map(({ role, content }) => ({ role, content })),
     stream: true as const,
+    stream_options: { include_usage: true },
+    ...(request.model.startsWith("gemini-") ? { reasoning: { effort: config.geminiThinkingLevel } } : {}),
   };
 }

@@ -66,6 +66,13 @@ export type ProviderRequest = {
   useReadUrl?: boolean;
 };
 
+export type ProviderUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  reasoningTokens?: number;
+};
+
 export type ProviderEvent =
   | { type: "delta"; text: string }
   | { type: "fact_sources"; sources: FactSource[] }
@@ -74,9 +81,11 @@ export type ProviderEvent =
   | { type: "status"; value: "searching" | "reading" | "answering"; provider?: AgentProvider; model?: string }
   | { type: "provider_attempt"; provider: AgentProvider; model: string; attempt: number }
   | { type: "provider_fallback"; from: AgentProvider; to: AgentProvider; model: string; code: string }
+  // Server-only observations. Never forward upstream IDs or reasoning diagnostics to the visitor.
+  | { type: "provider_diagnostics"; provider: AgentProvider; model: string; headersMs?: number; httpStatus?: number; firstByteMs?: number; firstReasoningMs?: number; responseId?: string; usage?: ProviderUsage }
   | { type: "provider_context"; deepseekToolCalls: DeepSeekToolStep[] }
   | { type: "tool_error"; tool: string; code: string }
   | { type: "search_evidence"; metadataPresent: boolean; queries: string[]; sourceUrls: string[]; supportCount: number; hasSearchEntryPoint: boolean; toolUsePromptTokens?: number }
   | { type: "archive_warning"; message: string }
-  | { type: "done"; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }
+  | { type: "done"; usage?: ProviderUsage }
   | { type: "error"; message: string; status?: number; code?: string; retryable?: boolean };

@@ -7,6 +7,9 @@ const duration = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
+export type GeminiThinkingLevel = "low" | "medium" | "high";
+const thinkingLevel = (value: string | undefined): GeminiThinkingLevel =>
+  value === "medium" || value === "high" ? value : "low";
 
 export const config = {
   port: Number(process.env.PORT || 8787),
@@ -15,6 +18,8 @@ export const config = {
   providerOrder: csv(process.env.AGENT_PROVIDER_ORDER, ["vercel", "gptproto"])
     .filter((name): name is "vercel" | "gptproto" => name === "vercel" || name === "gptproto"),
   providerFirstTokenTimeoutMs: duration(process.env.UPSTREAM_FIRST_TOKEN_TIMEOUT_MS, 120_000),
+  // Personal Q&A needs bounded deliberation; do not inherit Hydrogen's HIGH default.
+  geminiThinkingLevel: thinkingLevel(process.env.AGENT_GEMINI_THINKING_LEVEL),
   timeZone: process.env.AGENT_TIMEZONE || "Asia/Shanghai",
   databaseUrl: process.env.DATABASE_URL || "",
   adminPassword: process.env.ADMIN_PASSWORD || "",

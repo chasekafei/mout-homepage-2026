@@ -1,4 +1,4 @@
-import type { AgentProviderPreference, ChatMessage, ProviderEvent, ProviderRequest } from "@mout/agent-core";
+import type { AgentProviderPreference, ChatMessage, ProviderEvent, ProviderRequest, ProviderUsage } from "@mout/agent-core";
 import { config, type ProviderName } from "./config.js";
 import { normalizeDeepSeekToolCalls, parseDeepSeekWebChunk } from "./deepseek-web.js";
 import { geminiRequestBody, geminiStreamUrl, parseGeminiChunk, usesNativeGemini } from "./gemini.js";
@@ -14,6 +14,9 @@ function providerConfig(name: ProviderName): ProviderConfig {
 }
 
 type ProviderError = Extract<ProviderEvent, { type: "error" }>;
+type StreamObservation = { type: "upstream_metadata"; responseId?: string; usage?: ProviderUsage; reasoningObserved?: boolean }
+  | { type: "upstream_first_byte"; elapsedMs: number };
+type ParsedProviderEvent = ProviderEvent | StreamObservation;
 const retryableStatus = (status: number) => [408, 425, 429].includes(status) || status >= 500;
 const networkError = (error: unknown) => error instanceof Error && ["TypeError", "TimeoutError", "AbortError", "ProviderFirstTokenTimeoutError"].includes(error.name);
 
@@ -66,19 +69,56 @@ function textFromUnknown(value: unknown): string | undefined {
   return undefined;
 }
 
-function parseSseBlock(block: string, includeDeepSeekTools = false, nativeGemini = false): ProviderEvent[] {
+function mergeUsage(...values: Array<ProviderUsage | undefined>): ProviderUsage | undefined {
+  const result: ProviderUsage = {};
+  for (const value of values) {
+    if (!value) continue;
+    for (const key of ["promptTokens", "completionTokens", "totalTokens", "reasoningTokens"] as const) {
+      const count = value[key];
+      if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) result[key] = count;
+    }
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+function payloadObservations(payload: Record<string, any>, nativeGemini: boolean): StreamObservation[] {
+  if (nativeGemini && Array.isArray(payload)) return payload.flatMap((item) => payloadObservations(item, true));
+  if (!payload || typeof payload !== "object") return [];
+  const rawId = nativeGemini ? payload.responseId : payload.id ?? payload.response?.id;
+  // IDs are diagnostics, not arbitrary upstream text or headers.
+  const responseId = typeof rawId === "string" && /^[a-zA-Z0-9._:/-]{1,160}$/u.test(rawId) ? rawId : undefined;
+  const raw = nativeGemini ? payload.usageMetadata : payload.usage ?? payload.response?.usage;
+  const usage = mergeUsage(raw ? nativeGemini ? {
+    promptTokens: raw.promptTokenCount, completionTokens: raw.candidatesTokenCount,
+    totalTokens: raw.totalTokenCount, reasoningTokens: raw.thoughtsTokenCount,
+  } : {
+    promptTokens: raw.prompt_tokens ?? raw.input_tokens,
+    completionTokens: raw.completion_tokens ?? raw.output_tokens,
+    totalTokens: raw.total_tokens,
+    reasoningTokens: raw.completion_tokens_details?.reasoning_tokens ?? raw.output_tokens_details?.reasoning_tokens,
+  } : undefined);
+  const delta = payload.choices?.[0]?.delta;
+  const reasoningObserved = nativeGemini
+    ? (payload.candidates?.[0]?.content?.parts ?? []).some((part: Record<string, unknown>) => part.thought === true && typeof part.text === "string" && part.text.length > 0)
+    : [delta?.reasoning, delta?.reasoning_content].some((value) => typeof value === "string" && value.length > 0)
+      || payload.type === "response.reasoning_summary_text.delta" && typeof payload.delta === "string" && payload.delta.length > 0;
+  return responseId || usage || reasoningObserved ? [{ type: "upstream_metadata", ...(responseId ? { responseId } : {}), ...(usage ? { usage } : {}), ...(reasoningObserved ? { reasoningObserved: true } : {}) }] : [];
+}
+
+function parseSseBlock(block: string, includeDeepSeekTools = false, nativeGemini = false): ParsedProviderEvent[] {
   const data = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n").trim();
   if (!data || data === "[DONE]") return data === "[DONE]" ? [{ type: "done" }] : [];
   try {
     const payload = JSON.parse(data) as Record<string, any>;
-    if (nativeGemini) return parseGeminiChunk(payload);
+    const observations = payloadObservations(payload, nativeGemini);
+    if (nativeGemini) return [...observations, ...parseGeminiChunk(payload)];
     if (payload.error) {
       const status = Number(payload.error.status ?? payload.error.code);
       const retryable = (Number.isFinite(status) && retryableStatus(status))
         || ["server_error", "rate_limit_exceeded", "overloaded_error", "rate_limit_error"].includes(payload.error.type ?? payload.error.code);
       return [{ type: "error", message: String(payload.error.message || payload.error), code: "upstream_stream_error", retryable }];
     }
-    const events = includeDeepSeekTools ? parseDeepSeekWebChunk(payload) : [];
+    const events: ParsedProviderEvent[] = [...observations, ...(includeDeepSeekTools ? parseDeepSeekWebChunk(payload) : [])];
     const annotation = payload.annotation ?? payload.url_citation ?? payload.response?.annotation;
     const citationUrl = annotation?.url ?? annotation?.url_citation?.url;
     if (typeof citationUrl === "string") {
@@ -94,7 +134,8 @@ function parseSseBlock(block: string, includeDeepSeekTools = false, nativeGemini
       return [{ type: "error", message: typeof refusal === "string" ? refusal : "上游未能生成该问题的回答", code: "provider_refusal", retryable: false }];
     }
     const chatDelta = textFromUnknown(choice?.delta?.content) ?? textFromUnknown(choice?.message?.content);
-    const responseDelta = textFromUnknown(payload.delta) ?? textFromUnknown(payload.output_text_delta);
+    const responseDelta = payload.type === "response.output_text.delta" || !String(payload.type ?? "").startsWith("response.reasoning")
+      ? textFromUnknown(payload.delta) ?? textFromUnknown(payload.output_text_delta) : undefined;
     const text = chatDelta ?? responseDelta;
     if (text) events.push({ type: "delta", text });
     if (payload.type === "response.web_search_call.in_progress" || payload.type === "response.web_search_call.searching") {
@@ -139,14 +180,19 @@ async function readWithIdleTimeout(
   });
 }
 
-async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number, includeDeepSeekTools: boolean, nativeGemini: boolean): AsyncGenerator<ProviderEvent> {
+async function* parseStreamWithIdleTimeout(response: Response, idleTimeoutMs: number, includeDeepSeekTools: boolean, nativeGemini: boolean, startedAt: number): AsyncGenerator<ParsedProviderEvent> {
   if (!response.body) throw new Error("上游没有返回流");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const citations = new Set<string>();
   let buffer = "";
+  let firstByteReceived = false;
   while (true) {
     const { done, value } = await readWithIdleTimeout(reader, idleTimeoutMs);
+    if (value?.length && !firstByteReceived) {
+      firstByteReceived = true;
+      yield { type: "upstream_first_byte", elapsedMs: Date.now() - startedAt };
+    }
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
     const blocks = buffer.split(/\r?\n\r?\n+/);
     buffer = blocks.pop() || "";
@@ -214,6 +260,7 @@ export async function* streamProviderAttempt(name: ProviderName, request: Provid
       };
 
   const controller = new AbortController();
+  const startedAt = Date.now();
   let headerTimedOut = false;
   let totalTimedOut = false;
   const headerTimer = setTimeout(() => {
@@ -233,6 +280,7 @@ export async function* streamProviderAttempt(name: ProviderName, request: Provid
     return;
   }
   clearTimeout(headerTimer);
+  yield { type: "provider_diagnostics", provider: name, model: request.model, headersMs: Date.now() - startedAt, httpStatus: response.status };
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     yield { type: "error", message: `上游返回 ${response.status}${detail ? `：${detail.slice(0, 500)}` : ""}`, status: response.status, code: `http_${response.status}`, retryable: retryableStatus(response.status) };
@@ -252,7 +300,29 @@ export async function* streamProviderAttempt(name: ProviderName, request: Provid
     let answering = initialStatus === "answering";
     let hasWebSources = false;
     let upstreamFailed = false;
-    for await (const event of parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs, useDeepSeekTools, nativeGemini)) {
+    let observedResponseId: string | undefined;
+    let observedUsage: ProviderUsage | undefined;
+    let reasoningReceived = false;
+    for await (const event of parseStreamWithIdleTimeout(response, config.upstreamStreamIdleTimeoutMs, useDeepSeekTools, nativeGemini, startedAt)) {
+      if (event.type === "upstream_first_byte") {
+        yield { type: "provider_diagnostics", provider: name, model: request.model, firstByteMs: event.elapsedMs };
+        continue;
+      }
+      if (event.type === "upstream_metadata") {
+        const firstReasoning = event.reasoningObserved && !reasoningReceived;
+        const newResponseId = event.responseId && event.responseId !== observedResponseId ? event.responseId : undefined;
+        const usage = mergeUsage(observedUsage, event.usage);
+        const changedUsage = JSON.stringify(usage) !== JSON.stringify(observedUsage) ? usage : undefined;
+        if (event.responseId) observedResponseId = event.responseId;
+        observedUsage = usage;
+        reasoningReceived ||= Boolean(event.reasoningObserved);
+        if (firstReasoning || newResponseId || changedUsage) yield {
+          type: "provider_diagnostics", provider: name, model: request.model,
+          ...(firstReasoning ? { firstReasoningMs: Date.now() - startedAt } : {}),
+          ...(newResponseId ? { responseId: newResponseId } : {}), ...(changedUsage ? { usage: changedUsage } : {}),
+        };
+        continue;
+      }
       if (event.type === "search_evidence" && event.sourceUrls.length) hasWebSources = true;
       if (event.type === "error") upstreamFailed = true;
       if (event.type === "status") answering = event.value === "answering";
@@ -298,11 +368,17 @@ export async function* streamProvider(preference: AgentProviderPreference, reque
     let committed = false;
     let failure: ProviderError | undefined;
     let completed: Extract<ProviderEvent, { type: "done" }> | undefined;
+    let usage: ProviderUsage | undefined;
     const pending: ProviderEvent[] = [];
     try {
       for await (const event of streamProviderAttempt(name, { ...request, signal })) {
         if (event.type === "error") { failure = event; break; }
-        if (event.type === "done") { completed = event; continue; }
+        if (event.type === "provider_diagnostics") {
+          usage = mergeUsage(usage, event.usage);
+          yield event;
+          continue;
+        }
+        if (event.type === "done") { completed = event; usage = mergeUsage(usage, event.usage); continue; }
         if (event.type === "status") { yield event; continue; }
         if (event.type === "delta") {
           if (!event.text) continue;
@@ -327,7 +403,7 @@ export async function* streamProvider(preference: AgentProviderPreference, reque
     if (firstTokenExpired) failure = { type: "error", message: `等待首段正文超时（${config.providerFirstTokenTimeoutMs}ms）`, code: "first_token_timeout", retryable: true };
     failure ??= !committed ? { type: "error", message: "上游未返回有效正文", code: "empty_response", retryable: true }
       : !completed ? { type: "error", message: "上游响应流提前结束，回答可能不完整", code: "incomplete_stream", retryable: true } : undefined;
-    if (!failure) { yield completed!; return; }
+    if (!failure) { yield { ...completed!, ...(usage ? { usage } : {}) }; return; }
     const next = chain[index + 1];
     if (!committed && failure.retryable && next) {
       yield { type: "provider_fallback", from: name, to: next, model: request.model, code: failure.code ?? "upstream_error" };

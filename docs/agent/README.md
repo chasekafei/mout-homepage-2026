@@ -53,6 +53,10 @@ Railway 中新增 `VERCEL_AI_API_KEY`（沿用本地同名变量），将 `DEFAU
 
 每次供应商尝试的首正文等待默认最多 120 秒，可通过可选 `UPSTREAM_FIRST_TOKEN_TIMEOUT_MS` 调整。首段正文到达后停止该计时，继续使用原来的长流式预算；前端总截止时间为 10 分钟，为两次尝试及流式输出预留空间。客户端取消后不会再请求备用。日志中的 `provider attempt`、`provider fallback` 和 `provider complete provider=...` 可定位每一次切换。
 
+Gateway 的 Gemini 和 GPTProto 原生 Gemini 4 显式使用 `low` 思考强度，避免继承供应商默认值。可选 `AGENT_GEMINI_THINKING_LEVEL=medium` 或 `high` 可提高思考强度，无需配置时默认 `low`；这是思考深度设置，不是关闭思考或隐藏思考正文。两条 Gemini 4 路径保持同一强度，其他模型沿用各自设置。官方说明：[Gateway Google reasoning](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google)、[Hydrogen 开发指南](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen)。实际首字时间仍受上游排队和网络影响。
+
+诊断日志按每次供应商尝试记录响应头耗时、首个流数据、首次收到推理片段的耗时、上游响应 ID 和实际返回的 token 用量（含 `reasoningTokens`）。`provider complete` 中 `headersMs`、`firstTokenMs` 从整条供应商链开始累计，`attemptHeadersMs`、`attemptFirstByteMs`、`attemptFirstReasoningMs` 从最终尝试开始计时；`upstreamId` 是该次尝试的响应 ID。没有返回的字段标记为未提供，不把它当成零；不记录推理正文，内部诊断事件不发给浏览器。Gateway 的 `gen_...` ID 可在其控制台或 [Generation Lookup](https://vercel.com/docs/ai-gateway/observability-and-spend/usage) 继续检查上游供应商和时延。首字前的等待仍可能同时包含网络、路由、排队和思考，日志不能单独证明每项所占时间。
+
 Gemini 4 Hydrogen 与 Argon 在 GPTProto 路由使用原生 Gemini 流式接口 `/v1beta/models/{model}:streamGenerateContent?alt=sse`，将人格和个人资料传入 `systemInstruction`，将完整对话转换成 `contents`（`user` / `model`）。这是针对 Chat Completions 路由实测返回 `GenerateContentRequest.contents: contents is not specified` 的协议适配；模型 ID 和 API Key 沿用选择器配置，不切换模型。正文、来源和结束事件转换回现有 SSE 契约，思考片段不会显示为回答。需要搜索或阅读链接时，分别使用原生 `google_search`、`url_context` 工具。其他 GPTProto 模型继续使用现有 OpenAI 兼容协议。
 
 非 DeepSeek 模型的实时问题优先调用 DeepSeek 官方独立 [Search API](https://api-docs.deepseek.com/zh-cn/api/search/)，与 embedding 并行执行，再把实际返回的网页标题、原始发布时间、摘要和链接作为外部资料传给所选模型。回答模型不会因此切换成 DeepSeek。搜索来源通过 SSE 展示并归档；外部资料不覆盖个人履历，也不作为网页里的指令执行。检索条件中的日期不代表每条结果都发生在当天，未注明日期的资料不会被视为当天新闻。
@@ -83,6 +87,10 @@ GPT Proto 的 `gemini-3.8-flash` 仍保留在选择器中，使用原有 OpenAI 
 ## 语义检索
 
 知识检索默认将现有中文关键词检索与 GPT Proto embeddings 混合排序，不使用 Neon 向量扩展。向量索引只由博客、简历和口述经历原文片段的标题/章节/正文生成；不会嵌入 `facts.json` 的摘要、标签或摘要派生别名，它们只参与关键词匹配。2026 年简历 HTML、历史简历 PDF 和口述经历由本地原始来源生成片段。关键词命中不足时，请求一个查询向量；短追问会把上一条访客问题（最多 300 字符）与当前问题合成一个输入。单次最多等待 5 秒，瞬时错误重试一次，之后回退关键词检索。服务端没有加载到与语料 hash、模型版本和维数一致的索引时，也会继续使用关键词检索。
+
+个人记忆是事实依据，第一人称是表达方式；不能把所有检索文本都视为本人经历。人设统一要求保留主体、项目、平台、阶段和成果的对应关系，明确区分本人参与、团队背景、第三方案例与推测。未证实的具体细节直接省略，不能用模型知识、行业惯例、访客猜测或历史 AI 回答补齐；这些规则适用于所有模式，不为单个错误编写关键词分支。原文与向量索引无需因此改写或重建。
+
+每轮 `retrieval selected` 日志列出实际注入的资料 ID、类型、版本与正文字符数，不输出正文。数量和 ID 用于复盘该轮的召回覆盖，不能证明模型实际使用了每条资料。
 
 在本地设置 `GPTPROTO_API_KEY` 后，先从博客、简历和口述经历源文件更新原文片段，再生成静态文档索引：
 

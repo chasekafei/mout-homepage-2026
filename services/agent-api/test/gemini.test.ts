@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ProviderRequest } from "@mout/agent-core";
 import { geminiRequestBody, geminiStreamUrl, parseGeminiChunk, usesNativeGemini } from "../src/gemini.js";
+import { config } from "../src/config.js";
 
 const request = (overrides: Partial<ProviderRequest> = {}): ProviderRequest => ({
   model: "gemini-4-hydrogen",
@@ -42,6 +43,7 @@ test("native requests preserve system instructions and complete multi-turn text 
       { role: "model", parts: [{ text: "你好，测试者。" }] },
       { role: "user", parts: [{ text: "你还记得我叫什么吗？\n请简单回答。" }] },
     ],
+    generationConfig: { thinkingConfig: { thinkingLevel: config.geminiThinkingLevel } },
   });
   assert.ok(!JSON.stringify(body).includes("opaque-deepseek-signature"));
 });

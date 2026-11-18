@@ -224,10 +224,11 @@ test("resume source rules prohibit paraphrasing index summaries as quotations", 
     resumes.find((fact) => fact.sourceVersion === "2026") as PersonalFact,
     corpus.find((fact) => fact.id === "super-intern-results") as PersonalFact,
   ]));
-  assert.match(prompt, /口述经历和简历原文是我的个人经历与项目细节/);
+  assert.match(prompt, /口述经历和简历原文提供个人经历与项目细节/);
+  assert.match(prompt, /阅读时保留各自的叙述主体/);
   assert.match(prompt, /始终使用第一人称/);
   assert.match(prompt, /不要对外提到/);
-  assert.match(prompt, /不要向访客解释这些记忆来自哪里/);
+  assert.match(prompt, /它们是回答的事实依据，不是需要向访客解释的文档/);
   assert.match(prompt, /逐字引用对应记忆中的句子/);
   const summaryMemory = factContext([corpus.find((fact) => fact.id === "super-intern-results") as PersonalFact]).join("\n");
   assert.doesNotMatch(summaryMemory, /2026 年简历记载|旧版简历|来源：|根据资料/);
