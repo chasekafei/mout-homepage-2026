@@ -56,7 +56,7 @@ export function isRetryableEmbeddingError(error: unknown): boolean {
 
 export function isOriginalSource(fact: PersonalFact): boolean {
   return fact.visibility === "public"
-    && (fact.recordType === "blog" || fact.recordType === "resume_source" || fact.recordType === "oral_history");
+    && (fact.recordType === "blog" || fact.recordType === "resume_source" || fact.recordType === "oral_history" || fact.recordType === "industry_notes");
 }
 
 export function embeddingText(fact: PersonalFact): string {

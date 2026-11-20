@@ -17,7 +17,7 @@ export type PersonalFact = {
   id: string;
   title: string;
   body: string;
-  recordType?: "fact" | "opinion" | "blog" | "resume_source" | "oral_history";
+  recordType?: "fact" | "opinion" | "blog" | "resume_source" | "oral_history" | "industry_notes";
   publishedAt?: string;
   dateConfidence?: "uncertain";
   groupId?: string;

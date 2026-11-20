@@ -42,5 +42,17 @@
   {
     "query": "政府客户需要什么、我们能做到什么程度，怎么讲才能打动客户",
     "expectedIds": ["oral-history-001-个人网站资料-我的个人经历-12"]
+  },
+  {
+    "query": "AI 角色扮演和情感陪伴的主要区别是什么？",
+    "expectedIds": ["roleplay-industry-companion-vs-roleplay"]
+  },
+  {
+    "query": "你是怎么用 4chan 做 AI Roleplay 用户调研的？",
+    "expectedIds": ["roleplay-industry-research"]
+  },
+  {
+    "query": "AI 角色扮演怎么让玩家的选择改变后续剧情？",
+    "expectedIds": ["roleplay-industry-worlds"]
   }
 ]

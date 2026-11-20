@@ -180,7 +180,7 @@ export function retrieveFacts(
     if (selected.length >= limit) return false;
     if (selected.some((item) => item.id === fact.id)) return false;
     if (selfIntroduction && fact.recordType === "resume_source" && fact.sourceVersion !== "2026") return false;
-    if (selfIntroduction && fact.recordType === "blog") return false;
+    if (selfIntroduction && (fact.recordType === "blog" || fact.recordType === "industry_notes")) return false;
     if (fact.sensitivity === "personal") {
       const explicitTerms = new Set([...terms(fact.title), ...terms(fact.keywords?.join(" ") ?? "")]);
       const explicitlyRequested = queryTerms[0]?.size
@@ -353,6 +353,10 @@ export function factContext(facts: PersonalFact[]): string[] {
     }
     if (fact.recordType === "oral_history") {
       return `记忆·我的经历·原话：\n${fact.body}`;
+    }
+    if (fact.recordType === "industry_notes") {
+      const date = fact.publishedAt ? `·${fact.publishedAt}` : "";
+      return `记忆·我的行业观察·口述整理${date}：${fact.title}\n${fact.body}`;
     }
     const label = fact.recordType === "opinion"
       ? "记忆·我的观点"

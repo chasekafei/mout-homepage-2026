@@ -86,7 +86,7 @@ GPT Proto 的 `gemini-3.8-flash` 仍保留在选择器中，使用原有 OpenAI 
 
 ## 语义检索
 
-知识检索默认将现有中文关键词检索与 GPT Proto embeddings 混合排序，不使用 Neon 向量扩展。向量索引只由博客、简历和口述经历原文片段的标题/章节/正文生成；不会嵌入 `facts.json` 的摘要、标签或摘要派生别名，它们只参与关键词匹配。2026 年简历 HTML、历史简历 PDF 和口述经历由本地原始来源生成片段。关键词命中不足时，请求一个查询向量；短追问会把上一条访客问题（最多 300 字符）与当前问题合成一个输入。单次最多等待 5 秒，瞬时错误重试一次，之后回退关键词检索。服务端没有加载到与语料 hash、模型版本和维数一致的索引时，也会继续使用关键词检索。
+知识检索默认将现有中文关键词检索与 GPT Proto embeddings 混合排序，不使用 Neon 向量扩展。向量索引由博客、简历、口述经历和已审阅行业观察的片段标题/章节/正文生成；不会嵌入 `facts.json` 的摘要、标签或摘要派生别名，它们只参与关键词匹配。2026 年简历 HTML、历史简历 PDF 和口述经历由本地原始来源生成片段。关键词命中不足时，请求一个查询向量；短追问会把上一条访客问题（最多 300 字符）与当前问题合成一个输入。单次最多等待 5 秒，瞬时错误重试一次，之后回退关键词检索。服务端没有加载到与语料 hash、模型版本和维数一致的索引时，也会继续使用关键词检索。
 
 个人记忆是事实依据，第一人称是表达方式；不能把所有检索文本都视为本人经历。人设统一要求保留主体、项目、平台、阶段和成果的对应关系，明确区分本人参与、团队背景、第三方案例与推测。未证实的具体细节直接省略，不能用模型知识、行业惯例、访客猜测或历史 AI 回答补齐；这些规则适用于所有模式，不为单个错误编写关键词分支。原文与向量索引无需因此改写或重建。
 
@@ -101,7 +101,7 @@ node tools/content/build-agent-oral-history-corpus.mjs
 node tools/content/build-agent-embedding-index.mjs
 ```
 
-默认 embedding 配置为 `text-embedding-3-large`、1024 维和 GPT Proto 兼容 endpoint。可以用 `ROLEPLAY_EMBEDDING_MODEL`、`ROLEPLAY_EMBEDDING_VERSION`、`ROLEPLAY_EMBEDDING_DIMENSIONS`、`ROLEPLAY_EMBEDDING_BASE_URL` 覆盖，或使用对应的 `GPTPROTO_EMBEDDING_*` 变量。生成的 `content/agent-public/embedding-index.json` 与 `embedding-index.f32.gz` 需要随语料部署；更新博客、口述经历或简历原文后重建。添加原文后，先运行 `node tools/content/build-agent-blog-corpus.mjs`、`node tools/content/build-agent-oral-history-corpus.mjs` 或 `node tools/content/build-agent-resume-corpus.mjs` 更新原文片段。
+默认 embedding 配置为 `text-embedding-3-large`、1024 维和 GPT Proto 兼容 endpoint。可以用 `ROLEPLAY_EMBEDDING_MODEL`、`ROLEPLAY_EMBEDDING_VERSION`、`ROLEPLAY_EMBEDDING_DIMENSIONS`、`ROLEPLAY_EMBEDDING_BASE_URL` 覆盖，或使用对应的 `GPTPROTO_EMBEDDING_*` 变量。生成的 `content/agent-public/embedding-index.json` 与 `embedding-index.f32.gz` 需要随语料部署；更新博客、口述资料或简历原文后重建。添加原文后，先运行 `node tools/content/build-agent-blog-corpus.mjs`、`node tools/content/build-agent-oral-history-corpus.mjs` 或 `node tools/content/build-agent-resume-corpus.mjs` 更新原文片段。
 
 索引生成前可运行查询集查看关键词基线；索引生成后会额外请求测试查询的 embeddings 并比较混合召回：
 

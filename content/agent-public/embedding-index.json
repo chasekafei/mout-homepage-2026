@@ -3,7 +3,7 @@
   "model": "text-embedding-3-large",
   "version": "gptproto-text-embedding-3-large-1024-v1",
   "dimensions": 1024,
-  "corpusHash": "136828cd3a0882fb3769318c9e57a1986c02b6aef8f869046de9cf23c695d4f8",
+  "corpusHash": "c792698174799134147f0286eef498e1f177c1c47a78d7d2da87607e6a7f964b",
   "ids": [
     "blog-2008-永远的跳票公爵-永远的跳票公爵-001",
     "blog-2008-永远的跳票公爵-永远的跳票公爵-002",
@@ -963,7 +963,20 @@
     "oral-history-001-个人网站资料-我的个人经历-147",
     "oral-history-001-个人网站资料-我的个人经历-148",
     "oral-history-001-个人网站资料-我的个人经历-149",
-    "oral-history-001-个人网站资料-我的个人经历-150"
+    "oral-history-001-个人网站资料-我的个人经历-150",
+    "roleplay-industry-companion-vs-roleplay",
+    "roleplay-industry-replika",
+    "roleplay-industry-character-platforms",
+    "roleplay-industry-tavern",
+    "roleplay-industry-worlds",
+    "roleplay-industry-audience",
+    "roleplay-industry-research",
+    "roleplay-industry-real-world",
+    "roleplay-industry-interactive-video",
+    "roleplay-industry-memory",
+    "roleplay-industry-authoring",
+    "roleplay-industry-monetization",
+    "roleplay-industry-opportunities"
   ],
   "vectorFile": "embedding-index.f32.gz"
 }

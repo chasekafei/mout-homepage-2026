@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import {
   buildSystemPrompt,
   AGENT_CHAT_MODELS,
@@ -328,7 +328,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
       title: fact.recordType === "resume_source"
         ? `简历原文 · ${fact.sourceVersion} · ${fact.sourceFormat === "html" ? "HTML" : "PDF"} 第 ${fact.page} 页 · ${fact.title}`
         : fact.recordType === "blog" ? `博客：${fact.title}`
-          : fact.recordType === "oral_history" ? `口述原文：${fact.title}` : fact.title,
+          : fact.recordType === "oral_history" ? `口述原文：${fact.title}`
+            : fact.recordType === "industry_notes" ? `行业观察：${basename(fact.source, ".md")}` : fact.title,
       source: fact.recordType === "resume_source"
         ? `${fact.source}（${fact.sourceFormat === "html" ? "HTML" : "PDF"} 第 ${fact.page} 页）`
         : fact.recordType === "blog"

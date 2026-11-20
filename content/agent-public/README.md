@@ -1,6 +1,6 @@
 # Agent 公开知识库
 
-API 会把 `facts.json`、`blog.json`、`resume-source.json` 和 `oral-history.json` 加载成同一个可检索语料。`facts.json` 是关键词索引和主题摘要；其余文件保存博客、简历和口述经历的原文片段。
+API 会把 `facts.json`、`blog.json`、`resume-source.json` 和 `oral-history.json` 加载成同一个可检索语料。`facts.json` 是关键词索引和主题摘要；其余文件保存博客、简历和口述经历的原文片段，以及经本人审阅的行业交流正文。
 
 只把适合访客了解的内容放进语料。不要加入私人联系方式、公司机密或未经审核的内部笔记。检索只会返回 `visibility: "public"` 的记录。标记为 `sensitivity: "personal"` 的博客或口述片段，只有当前问题明确匹配其标题或关键词时才会召回。
 
@@ -27,7 +27,7 @@ API 会把 `facts.json`、`blog.json`、`resume-source.json` 和 `oral-history.j
 
 `facts.json` 的 `body` 是索引摘要，不是简历原文。涉及履历、职责或业绩时，模型优先参考 `resume-source.json` 的原文并用自然的第一人称回答；只有访客明确要求原句或出处时，才引用相关原文。2026 版在内部优先于旧版，聊天时不要主动解释版本来源。
 
-向量索引只使用博客、简历和口述经历原文记录，不嵌入 `facts.json` 的摘要正文；摘要中的关键词和问法仍供关键词检索使用。
+向量索引使用博客、简历、口述经历原文和已审阅的行业观察，不嵌入 `facts.json` 的摘要正文；摘要中的关键词和问法仍供关键词检索使用。
 
 ## 更新简历原文
 
@@ -49,6 +49,8 @@ node tools/content/build-agent-oral-history-corpus.mjs
 
 少数包含家庭成员或婚礼细节的片段会标记为个人内容，只在问题明确提到对应主题时召回。
 
+同一生成器也从 `docs/agent/AI Roleplay 与 AI 情感陪伴的行业观察.md` 导入经本人审阅的正文，按主题加上检索关键词。Agent 将这些片段作为带日期的行业观点。
+
 ## 添加或更新博客
 
 把自己的 Markdown 或 UTF-8 文本文章放在 `ref/Blog` 下，然后运行：
@@ -61,7 +63,7 @@ node tools/content/build-agent-blog-corpus.mjs
 
 ## 检索验证
 
-检索将中文 n-gram 关键词排名与 GPT Proto embedding 的语义排名用加权 RRF 合并；关键词结果权重较高，项目名、原文短语和别名仍有优先级。语义索引只嵌入博客、简历和口述经历的原文片段标题/章节/正文，不嵌入 `facts.json` 的摘要正文、标签或摘要生成的别名。索引是本地生成的压缩 Float32 文件，不使用 Neon/pgvector。单篇长博客最多召回两个片段、口述经历最多三个片段、简历最多 3 段；简历原文版本优先级和敏感资料门槛仍然生效。没有索引、模型版本与语料 hash 不匹配、或 embedding API 临时失败时，会自动退回关键词检索。
+检索将中文 n-gram 关键词排名与 GPT Proto embedding 的语义排名用加权 RRF 合并；关键词结果权重较高，项目名、原文短语和别名仍有优先级。语义索引只嵌入博客、简历、口述经历和已审阅行业观察的片段标题/章节/正文，不嵌入 `facts.json` 的摘要正文、标签或摘要生成的别名。索引是本地生成的压缩 Float32 文件，不使用 Neon/pgvector。单篇长博客最多召回两个片段、口述经历最多三个片段、简历最多 3 段；简历原文版本优先级和敏感资料门槛仍然生效。没有索引、模型版本与语料 hash 不匹配、或 embedding API 临时失败时，会自动退回关键词检索。
 
 在设置好 `GPTPROTO_API_KEY` 和 embedding 配置的本地环境中生成索引：
 
