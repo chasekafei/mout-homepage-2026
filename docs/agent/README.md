@@ -113,13 +113,13 @@ pnpm agent:retrieval-eval
 
 ## 本地运行
 
-先在 `services/agent-api/.env` 中填写至少一个 provider 的 key：
+将模型密钥填在 `services/agent-api/.env.local`。Gemini、GPT 和 Claude 至少需要 `VERCEL_AI_API_KEY` 或 `GPTPROTO_API_KEY` 其中一项。DeepSeek V4 Pro 使用 `DEEPSEEK_API_KEY`。如果还没有本地配置文件，可以从模板创建。
 
 ```bash
-cp services/agent-api/.env.example services/agent-api/.env
+cp -n services/agent-api/.env.example services/agent-api/.env.local
 ```
 
-启动服务端：
+服务端的 `dev` 命令会读取该目录下的 `.env` 和 `.env.local`。同名变量以 `.env.local` 优先，终端已设置的环境变量优先于文件。修改配置后重启服务端。
 
 ```bash
 pnpm --filter @mout/agent-api dev
