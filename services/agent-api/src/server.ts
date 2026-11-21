@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { basename, dirname, resolve } from "node:path";
 import {
+  buildResearchContext,
   buildSystemPrompt,
   AGENT_CHAT_MODELS,
   estimateTextTokens,
@@ -12,13 +13,15 @@ import {
   selectHistoryWithinBudget,
   shouldSearch,
   buildRuntimeContext,
-  rankFacts,
+  planEvidenceRetrieval,
   shouldUseSemanticRetrieval,
   type FactSource,
   type AgentRequest,
   type ChatMessage,
+  type ProviderEvent,
   type SemanticFactScore,
 } from "@mout/agent-core";
+import { researchCitationStream } from "./research-citations.js";
 import { config, type ProviderName } from "./config.js";
 import { primaryProvider, providerModel, sseEvent, streamProvider, supportsDeepSeekWebTools } from "./provider.js";
 import { normalizeDeepSeekToolCalls } from "./deepseek-web.js";
@@ -43,17 +46,19 @@ let embeddingIndex: EmbeddingIndex | null = null;
 const hits = new Map<string, { count: number; resetAt: number }>();
 
 async function loadFacts() {
-  const [factsRaw, blogsRaw, resumesRaw, oralHistoryRaw] = await Promise.all([
+  const [factsRaw, blogsRaw, resumesRaw, oralHistoryRaw, researchRaw] = await Promise.all([
     readFile(resolve(root, "content/agent-public/facts.json"), "utf8"),
     readFile(resolve(root, "content/agent-public/blog.json"), "utf8"),
     readFile(resolve(root, "content/agent-public/resume-source.json"), "utf8"),
     readFile(resolve(root, "content/agent-public/oral-history.json"), "utf8"),
+    readFile(resolve(root, "content/agent-public/research.json"), "utf8"),
   ]);
   return [
     ...(JSON.parse(factsRaw) as import("@mout/agent-core").PersonalFact[]),
     ...(JSON.parse(blogsRaw) as import("@mout/agent-core").PersonalFact[]),
     ...(JSON.parse(resumesRaw) as import("@mout/agent-core").PersonalFact[]),
     ...(JSON.parse(oralHistoryRaw) as import("@mout/agent-core").PersonalFact[]),
+    ...(JSON.parse(researchRaw) as import("@mout/agent-core").PersonalFact[]),
   ];
 }
 
@@ -177,15 +182,22 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   const model = providerModel(provider, requestedModel, { useWebSearch: search, useReadUrl: readUrl, history: input.history });
   const protocol = provider === "gptproto" && usesNativeGemini(model) ? "gemini"
     : provider === "gptproto" && search ? "responses" : "chat-completions";
-  const retrievalQueries = [
-    input.message,
-    ...(input.history ?? []).filter((message) => message.role === "user").slice(-2).map((message) => message.content),
-  ];
-  const semanticCandidate = Boolean(
-    embeddingIndex
-      && config.embeddings.apiKey
-      && shouldUseSemanticRetrieval(retrievalQueries, facts, config.embeddings.lexicalConfidenceThreshold),
-  );
+  const previousUserQueries = (input.history ?? []).filter((message) => message.role === "user")
+    .slice(-2).reverse().map((message) => message.content);
+  const retrievalQueries = [input.message, ...previousUserQueries];
+  // Only an explicitly referential follow-up inherits the previous topic for routing.
+  const previousTopic = previousUserQueries[0];
+  const followUp = previousTopic && /^(?:那[，、\s]*?(?=它|这|其中)|它|这(?:两|几|个|款)|他们|其中|那(?:个|款|几款)|(?:and )?(?:what|how) about (?:it|them))/iu.test(input.message.trim());
+  const evidenceQuery = followUp ? `${input.message}\n${previousTopic.slice(0, 300)}` : input.message;
+  const evidenceLanes = planEvidenceRetrieval(evidenceQuery, facts, config.maxContextFacts);
+  const laneQueries = evidenceLanes.map((lane) => lane.kind === "research"
+    ? (followUp ? [input.message, previousTopic] : [input.message])
+    : retrievalQueries);
+  const semanticLanes = evidenceLanes.map((lane, i) => Boolean(
+    embeddingIndex && config.embeddings.apiKey && lane.facts.some((fact) => embeddingIndex?.vectors.has(fact.id))
+    && shouldUseSemanticRetrieval(laneQueries[i], lane.facts, config.embeddings.lexicalConfidenceThreshold),
+  ));
+  const semanticCandidate = semanticLanes.some(Boolean);
   const requestId = randomUUID();
   const requestStartedAt = Date.now();
   const elapsed = () => `${Date.now() - requestStartedAt}ms`;
@@ -249,7 +261,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     })).then((pages) => pages.filter((page): page is WebPage => page !== null))
     : Promise.resolve([]);
 
-  let semanticScores: SemanticFactScore[] = [];
+  const semanticScores: SemanticFactScore[][] = evidenceLanes.map(() => []);
   if (semanticCandidate && embeddingIndex) {
     const embeddingStartedAt = Date.now();
     const embeddingTimeoutMs = Math.min(config.embeddings.timeoutMs, config.embeddingSoftTimeoutMs);
@@ -257,11 +269,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     try {
       // One request keeps short follow-ups grounded in their immediate context
       // without paying for three separately weighted embedding vectors.
-      const previousUserQuery = [...(input.history ?? [])]
-        .reverse()
-        .find((message) => message.role === "user")?.content;
-      const semanticQuery = input.message.length < 100 && previousUserQuery
-        ? `上一句：${previousUserQuery.slice(0, 300)}\n当前问题：${input.message.slice(0, 4_000)}`
+      const semanticQuery = input.message.length < 100 && previousTopic
+        ? `上一句：${previousTopic.slice(0, 300)}\n当前问题：${input.message.slice(0, 4_000)}`
         : input.message.slice(0, 4_000);
       const vectors = await createEmbeddingsWithRetry(
         [semanticQuery],
@@ -276,24 +285,24 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
           },
         },
       );
-      semanticScores = rankSemanticCandidates(
-        vectors.map((vector) => ({ vector, weight: 1 })),
-        embeddingIndex,
-        24,
-        config.embeddings.minSimilarity,
-      );
-      console.info(`${logPrefix} embedding complete duration=${Date.now() - embeddingStartedAt}ms candidates=${semanticScores.length}`);
+      const queryVectors = vectors.map((vector) => ({ vector, weight: 1 }));
+      for (const [i, lane] of evidenceLanes.entries()) {
+        if (!semanticLanes[i]) continue;
+        semanticScores[i] = rankSemanticCandidates(queryVectors, embeddingIndex, 24, config.embeddings.minSimilarity, new Set(lane.facts.map((fact) => fact.id)));
+      }
+      console.info(`${logPrefix} embedding complete duration=${Date.now() - embeddingStartedAt}ms candidates=${semanticScores.flat().length}`);
     } catch (error) {
       const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       console.warn(`${logPrefix} embedding failed duration=${Date.now() - embeddingStartedAt}ms error=${detail}; fallback=lexical`);
     }
   }
-  const selectedFacts = retrieveFacts(retrievalQueries, facts, config.maxContextFacts, semanticScores);
-  console.info(`${logPrefix} retrieval complete duration=${elapsed()} facts=${selectedFacts.length} semanticCandidates=${semanticScores.length}`);
+  const selectedFacts = evidenceLanes.flatMap((lane, i) => retrieveFacts(laneQueries[i], lane.facts, lane.limit, semanticScores[i]));
+  console.info(`${logPrefix} retrieval complete duration=${elapsed()} facts=${selectedFacts.length} research=${selectedFacts.filter((fact) => fact.recordType === "research").length} semanticCandidates=${semanticScores.flat().length}`);
   console.info(`${logPrefix} retrieval selected ${JSON.stringify(selectedFacts.map((fact) => ({ id: fact.id, type: fact.recordType ?? "fact", ...(fact.sourceVersion ? { version: fact.sourceVersion } : {}), chars: fact.body.length })))}`);
   const [externalResults, externalPages] = await Promise.all([externalSearchPromise, externalPagesPromise]);
   const externalContext = externalResults.length ? webSearchContext(externalResults, externalSearchQuery) : "";
-  const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext)
+  const research = buildResearchContext(selectedFacts);
+  const systemPrompt = buildSystemPrompt(input.mode, factContext(selectedFacts), runtimeContext, research.context)
     + (externalContext ? `\n\n${externalContext}` : "")
     + (externalPages.length ? `\n\n${webPageContext(externalPages)}` : "")
     + (provider !== "deepseek" && readUrl && !externalPages.length ? "\n\n截至当前还没有取得访客提供的网页正文。只有实际获得网页或工具结果后才能总结链接内容，不能根据网址猜测。" : "")
@@ -335,7 +344,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
         : fact.recordType === "blog"
           ? `历史博客${fact.publishedAt ? ` · ${fact.publishedAt}${fact.dateConfidence === "uncertain" ? "（日期不确定）" : ""}` : " · 日期未确认"} · ${fact.source}`
           : fact.source,
-      kind: projectPresentation ? "project" : "profile",
+      kind: fact.recordType === "research" ? "research" : projectPresentation ? "project" : "profile",
       ...(projectPresentation ? { project: projectPresentation } : {}),
     };
   });
@@ -369,7 +378,22 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
   }) : Promise.resolve(null);
 
   let answer = "";
-  let citations: Array<{ title: string; url: string }> = [...externalSources];
+  const citations: Array<{ title: string; url: string; origin?: "research" }> = [...externalSources];
+  const researchReferences = research.sources.size ? researchCitationStream(research.sources) : null;
+  const writeEvent = (event: ProviderEvent) => {
+    if (!res.destroyed && !res.writableEnded) res.write(sseEvent(event));
+  };
+  const writeCitation = (event: Extract<ProviderEvent, { type: "citation" }>) => {
+    if (!citations.some((citation) => citation.url === event.url && citation.origin === event.origin)) {
+      citations.push({ title: event.title, url: event.url, ...(event.origin ? { origin: event.origin } : {}) });
+      writeEvent(event);
+    }
+  };
+  const writeAnswer = (text: string) => {
+    if (!text) return;
+    answer += text;
+    writeEvent({ type: "delta", text });
+  };
   let effectiveProvider = provider;
   let answerStatus: "complete" | "error" = "complete";
   const providerStartedAt = Date.now();
@@ -438,9 +462,20 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
           firstTokenAt = Date.now();
           console.info(`${logPrefix} provider first-token after ${firstTokenAt - providerStartedAt}ms chars=${event.text.length}`);
         }
-        answer += event.text;
+        if (researchReferences) {
+          const rendered = researchReferences.push(event.text);
+          writeAnswer(rendered.text);
+          for (const citation of rendered.citations) writeCitation(citation);
+        } else {
+          writeAnswer(event.text);
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        continue;
       }
-      if (event.type === "citation") citations = [...citations, { title: event.title, url: event.url }];
+      if (event.type === "citation") {
+        writeCitation(event);
+        continue;
+      }
       if (event.type === "status" && (event.value === "searching" || event.value === "reading")) {
         console.info(`${logPrefix} provider status=${event.value} after ${Date.now() - providerStartedAt}ms`);
       }
@@ -454,6 +489,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
         answerStatus = "error";
         console.error(`${logPrefix} provider error after ${Date.now() - providerStartedAt}ms: ${event.message}`);
       }
+      if (event.type === "done" || event.type === "error") writeAnswer(researchReferences?.finish() ?? "");
       if (event.type === "done" && event.usage) providerUsage = { ...providerUsage, ...event.usage };
       if (!res.destroyed && !res.writableEnded) res.write(sseEvent(event));
       await new Promise<void>((resolve) => setImmediate(resolve));
@@ -464,6 +500,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     console.error(`${logPrefix} provider exception after ${Date.now() - providerStartedAt}ms: ${message}`);
     if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "error", message }));
   }
+  writeAnswer(researchReferences?.finish() ?? "");
   if (!answer.trim() || requestController.signal.aborted) answerStatus = "error";
   if (effectiveProvider === "vercel" && search && !externalResults.length && !searchSourceUrls.size) {
     if (!res.destroyed && !res.writableEnded) res.write(sseEvent({ type: "tool_error", tool: "web_search", code: "search_evidence_unavailable" }));

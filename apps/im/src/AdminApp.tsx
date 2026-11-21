@@ -27,8 +27,8 @@ type ConversationMessage = {
   provider?: string;
   model?: string;
   status?: string;
-  citations?: Array<{ title: string; url: string }>;
-  factSources?: Array<{ id: string; title: string; source: string; kind: "profile" | "project"; project?: { name: string; href: string } }>;
+  citations?: Array<{ title: string; url: string; origin?: "research" }>;
+  factSources?: Array<{ id: string; title: string; source: string; kind: "profile" | "project" | "research"; project?: { name: string; href: string } }>;
 };
 type ConversationDetail = ConversationSummary & { notes: string; messages: ConversationMessage[] };
 type ApiError = Error & { status?: number };
@@ -298,7 +298,7 @@ export function AdminApp() {
                 <div className="archive-message-meta"><strong>{message.role === "user" ? "访客" : "MouT 的分身"}</strong><time>{dateTime(message.createdAt)}</time>{message.role === "assistant" && message.model && <span>{message.model}</span>}{message.status && message.status !== "complete" && <span className="archive-message-status">{message.status}</span>}</div>
                 <MarkdownContent content={message.content || (message.status === "pending" ? "回答生成中…" : "（无文本内容）")} className="archive-markdown" />
                 {!!message.factSources?.length && <div className="archive-fact-sources"><strong>本轮检索注入的资料</strong>{message.factSources.map((source) => <span key={source.id}>{source.title}<small>{source.source}</small></span>)}</div>}
-                {!!message.citations?.length && <div className="archive-citations">{message.citations.map((citation) => <a key={citation.url} href={citation.url} target="_blank" rel="noreferrer">{citation.title || citation.url}<Icon name="external" /></a>)}</div>}
+                {!!message.citations?.length && <div className="archive-citations">{message.citations.map((citation) => <a key={`${citation.origin ?? "web"}:${citation.url}`} href={citation.url} target="_blank" rel="noreferrer">{citation.title || citation.url}<Icon name="external" /></a>)}</div>}
               </article>)}
               {detail.messages.length === 0 && !loadingDetail && <div className="admin-empty-transcript">这个对话还没有消息。</div>}
             </div>

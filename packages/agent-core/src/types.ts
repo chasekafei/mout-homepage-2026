@@ -13,11 +13,27 @@ export type ChatMessage = {
   deepseekToolCalls?: DeepSeekToolStep[];
 };
 
+export type ResearchSource = {
+  title: string;
+  url: string;
+  basis: "primary" | "estimate" | "reported";
+};
+
+export type ResearchEvidence = {
+  kind: "external_fact" | "research_analysis" | "hypothesis";
+  subjects: string[];
+  aliases?: string[];
+  asOf: string;
+  scope?: string;
+  sources: ResearchSource[];
+};
+
 export type PersonalFact = {
   id: string;
   title: string;
   body: string;
-  recordType?: "fact" | "opinion" | "blog" | "resume_source" | "oral_history" | "industry_notes";
+  recordType?: "fact" | "opinion" | "blog" | "resume_source" | "oral_history" | "industry_notes" | "research";
+  evidence?: ResearchEvidence;
   publishedAt?: string;
   dateConfidence?: "uncertain";
   groupId?: string;
@@ -43,7 +59,7 @@ export type FactSource = {
   id: string;
   title: string;
   source: string;
-  kind: "profile" | "project";
+  kind: "profile" | "project" | "research";
   project?: PersonalFact["project"];
 };
 
@@ -77,7 +93,7 @@ export type ProviderEvent =
   | { type: "delta"; text: string }
   | { type: "fact_sources"; sources: FactSource[] }
   | { type: "contact_prompt" }
-  | { type: "citation"; title: string; url: string }
+  | { type: "citation"; title: string; url: string; origin?: "research" }
   | { type: "status"; value: "searching" | "reading" | "answering"; provider?: AgentProvider; model?: string }
   | { type: "provider_attempt"; provider: AgentProvider; model: string; attempt: number }
   | { type: "provider_fallback"; from: AgentProvider; to: AgentProvider; model: string; code: string }

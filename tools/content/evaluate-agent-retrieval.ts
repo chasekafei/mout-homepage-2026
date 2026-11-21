@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  planEvidenceRetrieval,
   rankFacts,
   rankFactsHybrid,
   retrieveFacts,
@@ -34,7 +35,7 @@ const embeddingConfig: EmbeddingConfig = {
 };
 
 async function readCorpus(): Promise<PersonalFact[]> {
-  const files = ["facts.json", "blog.json", "resume-source.json", "oral-history.json"];
+  const files = ["facts.json", "blog.json", "resume-source.json", "oral-history.json", "research.json"];
   const values = await Promise.all(files.map((file) => readFile(resolve(root, `content/agent-public/${file}`), "utf8")));
   return values.flatMap((value) => JSON.parse(value) as PersonalFact[]);
 }
@@ -65,18 +66,23 @@ const report = [];
 
 for (let indexInEval = 0; indexInEval < samples.length; indexInEval += 1) {
   const sample = samples[indexInEval];
-  const lexicalRanked = rankFacts(sample.query, corpus).filter(({ score }) => score > 0).map(({ fact }) => fact);
-  const semanticScores = semanticEnabled
-    ? rankSemanticCandidates([{ vector: queryVectors[indexInEval], weight: 1 }], index, 24, embeddingConfig.minSimilarity)
-    : [];
-  const useSemantic = semanticEnabled && shouldUseSemanticRetrieval(sample.query, corpus, 80);
-  const hybridRanked = useSemantic
-    ? rankFactsHybrid(sample.query, corpus, semanticScores).map(({ fact }) => fact)
-    : lexicalRanked;
+  const lanes = planEvidenceRetrieval(sample.query, corpus, 20).map((lane) => {
+    const lexicalRanked = rankFacts(sample.query, lane.facts).filter(({ score }) => score > 0).map(({ fact }) => fact);
+    const useSemantic = semanticEnabled && shouldUseSemanticRetrieval(sample.query, lane.facts, 80);
+    const semanticScores = useSemantic
+      ? rankSemanticCandidates([{ vector: queryVectors[indexInEval], weight: 1 }], index!, 24, embeddingConfig.minSimilarity, new Set(lane.facts.map((fact) => fact.id)))
+      : [];
+    return {
+      lexicalRanked,
+      hybridRanked: useSemantic ? rankFactsHybrid(sample.query, lane.facts, semanticScores).map(({ fact }) => fact) : lexicalRanked,
+      surfaced: retrieveFacts(sample.query, lane.facts, lane.limit, semanticScores),
+    };
+  });
+  const lexicalRanked = lanes.flatMap((lane) => lane.lexicalRanked);
+  const hybridRanked = lanes.flatMap((lane) => lane.hybridRanked);
   const lexicalPosition = lexicalRanked.findIndex((fact) => matches(fact, sample));
   const hybridPosition = hybridRanked.findIndex((fact) => matches(fact, sample));
-  const surfaced = retrieveFacts(sample.query, corpus, 8, semanticScores);
-  const topSourceIds = surfaced.map(({ id }) => id);
+  const topSourceIds = lanes.flatMap((lane) => lane.surfaced.map(({ id }) => id));
   baselineRows.push({
     reciprocalRank: lexicalPosition < 0 ? 0 : 1 / (lexicalPosition + 1),
     hitAt3: lexicalPosition >= 0 && lexicalPosition < 3,

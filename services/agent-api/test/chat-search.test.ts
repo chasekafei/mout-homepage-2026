@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-test("chat obtains structured search sources before asking Hydrogen and exposes them in SSE", { timeout: 20_000 }, async () => {
+test("chat preserves the source and type of live and research evidence in SSE", { timeout: 20_000 }, async () => {
   const requests: Array<{ path: string; body: any }> = [];
   let searchHasResults = true;
   let vercelFails = false;
@@ -36,6 +36,12 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
     }
     if (req.url?.startsWith("/v1beta/models/gemini-4-hydrogen:streamGenerateContent")) {
       res.setHeader("Content-Type", "text/event-stream");
+      if (body.systemInstruction.parts[0].text.includes("JanitorAI 的托管入口")) {
+        const frames = ["它支持平台提供的后端。[[", "R1", "]] [[R999]]"];
+        return res.end(frames.map((text, i) => `data: ${JSON.stringify({ candidates: [{
+          content: { parts: [{ text }] }, ...(i === frames.length - 1 ? { finishReason: "STOP" } : {}),
+        }] })}\n\n`).join(""));
+      }
       return res.end(`data: ${JSON.stringify({ candidates: [{
         content: { parts: [{ text: searchHasResults ? "示例产品发布了功能 X。来源：https://example.com/release" : "暂时没有可核验的实时信息。" }] }, finishReason: "STOP",
       }] })}\n\n`);
@@ -131,6 +137,17 @@ test("chat obtains structured search sources before asking Hydrogen and exposes 
     assert.match(pageRequests.find((item) => item.path === "/v1/chat/completions")!.body.messages[0].content, /PAGEONLYFACT/u);
     assert.ok(pageEvents.some((event) => event.type === "citation" && event.url === "https://example.com/page"));
     assert.ok(!pageEvents.some((event) => event.type === "error"));
+    const research = await chat("gptproto", "JanitorAI 的 Janitor Router 怎么用？");
+    const researchSources = research.find((event) => event.type === "fact_sources")?.sources;
+    assert.ok(researchSources?.some((source: any) => source.kind === "research"));
+    assert.ok(researchSources?.every((source: any) => source.kind === "research"));
+    const citation = research.find((event) => event.type === "citation");
+    assert.equal(citation?.origin, "research");
+    assert.equal(new URL(citation.url).hostname, "help.janitorai.com");
+    const rendered = research.filter((event) => event.type === "delta").map((event) => event.text).join("");
+    assert.match(rendered, /\[出处 1\]\(<https:\/\/help.janitorai.com\//u);
+    assert.doesNotMatch(rendered, /\[\[R/u);
+    assert.match(logs, /index loaded: 1\d{3} records/u);
     assert.match(logs, /retrieval selected \[\{"id":/u);
     assert.match(logs, /"responseId":"gen_gateway_diagnostic"/u);
     assert.match(logs, /"reasoningTokens":20/u);

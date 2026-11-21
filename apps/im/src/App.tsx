@@ -168,7 +168,7 @@ function SourceRow({ source }: { source: AgentSource }) {
   const content = (
     <>
       <span className={`source-mark source-${source.kind}`} aria-hidden><Icon name={source.kind === "web" ? "globe" : "book"} size={15} /></span>
-      <span className="source-copy"><strong>{source.title}</strong><small>{source.detail ?? source.source ?? (source.kind === "web" ? "实时来源" : "公开资料")}</small></span>
+      <span className="source-copy"><strong>{source.title}</strong><small>{source.detail ?? (source.kind === "research" ? `行业调研 · ${source.source ?? ""}` : source.source) ?? (source.kind === "web" ? "实时来源" : "公开资料")}</small></span>
       {externalUrl && <Icon name="external" size={14} />}
     </>
   );
@@ -186,6 +186,7 @@ function sourceGroupKey(source: AgentSource): string {
 
 function sourceDisplayTitle(source: AgentSource): string {
   if (source.kind === "web") return source.title;
+  if (source.kind === "research") return source.source ?? source.title;
   if (source.title.startsWith("博客：")) return source.title.replace(/\s+\/\s+.*$/u, "");
   return source.title.replace(/\s+·\s+(?:PDF|HTML) 第 \d+ 页(?:\s+·.*)?$/u, "");
 }
@@ -402,7 +403,7 @@ export function App() {
           setShowContext(true);
         }
         if (event.type === "fact_sources") {
-          const factSources = event.sources.filter((source) => source.kind === "profile" || source.kind === "project");
+          const factSources = event.sources;
           setMessages((current) => current.map((message) => message.id === assistant.id
             ? { ...message, sources: [...(message.sources ?? []).filter((source) => source.kind === "web"), ...factSources] }
             : message));

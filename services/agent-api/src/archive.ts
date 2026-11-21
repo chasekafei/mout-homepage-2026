@@ -139,7 +139,7 @@ export async function completeArchiveTurn(args: {
   status: "complete" | "error";
   model: string;
   provider: string;
-  citations: Array<{ title: string; url: string }>;
+  citations: Array<{ title: string; url: string; origin?: "research" }>;
   factSources: FactSource[];
 }) {
   if (!pool) return;

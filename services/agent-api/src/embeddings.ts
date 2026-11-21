@@ -56,7 +56,7 @@ export function isRetryableEmbeddingError(error: unknown): boolean {
 
 export function isOriginalSource(fact: PersonalFact): boolean {
   return fact.visibility === "public"
-    && (fact.recordType === "blog" || fact.recordType === "resume_source" || fact.recordType === "oral_history" || fact.recordType === "industry_notes");
+    && (fact.recordType === "blog" || fact.recordType === "resume_source" || fact.recordType === "oral_history" || fact.recordType === "industry_notes" || fact.recordType === "research");
 }
 
 export function embeddingText(fact: PersonalFact): string {
@@ -185,11 +185,13 @@ export function rankSemanticCandidates(
   index: EmbeddingIndex,
   limit = 24,
   minSimilarity = 0.2,
+  eligibleIds?: ReadonlySet<string>,
 ): Array<{ id: string; score: number }> {
   const best = new Map<string, number>();
   for (const query of queries) {
     const normalizedQuery = normalizeVector(query.vector, index.manifest.dimensions);
     for (const [id, document] of index.vectors) {
+      if (eligibleIds && !eligibleIds.has(id)) continue;
       let similarity = 0;
       for (let column = 0; column < normalizedQuery.length; column += 1) {
         similarity += normalizedQuery[column] * document[column];

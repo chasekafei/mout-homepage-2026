@@ -18,7 +18,7 @@ export type ChatMessage = {
 export type AgentSource = {
   id: string;
   title: string;
-  kind: "profile" | "project" | "web";
+  kind: "profile" | "project" | "research" | "web";
   detail?: string;
   url?: string;
   source?: string;
@@ -156,14 +156,14 @@ function parseEventLine(line: string): AgentEvent | null {
       return { type: "tool_error", tool: payload.tool, code: payload.code };
     }
     if (payload.type === "citation" && typeof payload.title === "string" && typeof payload.url === "string") {
-      return { type: "source", source: { id: payload.url, title: payload.title, kind: "web", detail: "实时来源", url: payload.url } };
+      return { type: "source", source: { id: payload.url, title: payload.title, kind: "web", detail: payload.origin === "research" ? "调研出处" : "实时来源", url: payload.url } };
     }
     if (payload.type === "fact_sources" && Array.isArray(payload.sources)) {
       const sources = payload.sources.filter((source): source is AgentSource => Boolean(source)
         && typeof source === "object"
         && typeof (source as AgentSource).id === "string"
         && typeof (source as AgentSource).title === "string"
-        && ((source as AgentSource).kind === "profile" || (source as AgentSource).kind === "project"));
+        && ((source as AgentSource).kind === "profile" || (source as AgentSource).kind === "project" || (source as AgentSource).kind === "research"));
       return { type: "fact_sources", sources };
     }
     if (payload.type === "contact_prompt") return { type: "contact_prompt" };

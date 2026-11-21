@@ -1,0 +1,2202 @@
+[
+  {
+    "id": "research-sillytavern",
+    "title": "SillyTavern 的创作控制与使用门槛",
+    "recordType": "research",
+    "groupId": "research-tavern-workflow",
+    "source": "酒馆与角色平台 · 产品对照",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "角色卡",
+      "世界书"
+    ],
+    "keywords": [
+      "SillyTavern",
+      "酒馆",
+      "自带 API",
+      "自托管",
+      "角色卡",
+      "预设",
+      "世界书"
+    ],
+    "body": "SillyTavern 是本地安装的开源前端，通过本地或远程模型后端生成回复。角色卡描述角色和情境，预设配置提示词或模型行为，世界书可以随聊天内容把相关设定带进上下文。可以把模型、预设和角色内容分别换掉，也要承担安装、配置和排查模型差异的成本。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "SillyTavern"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "SillyTavern 官方文档",
+          "url": "https://docs.sillytavern.app/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-tavern-vs-janitor",
+    "title": "SillyTavern 与 JanitorAI 的用户路径",
+    "recordType": "research",
+    "groupId": "research-tavern-workflow",
+    "source": "酒馆与角色平台 · 产品对照",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "角色平台",
+      "创作者"
+    ],
+    "keywords": [
+      "SillyTavern",
+      "JanitorAI",
+      "云酒馆",
+      "角色发现",
+      "角色卡",
+      "入口门槛"
+    ],
+    "body": "比较这两类产品，可以从用户第一次怎么开始聊看起。SillyTavern 把模型、提示词和角色内容的控制权交给使用者；JanitorAI 的公开入口围绕找角色、开始聊和分享角色。前者适合想亲手调整体验的用户，后者把配置的负担留给平台。看创作生态时，值得同时比较作品能否编辑或迁移，以及发布后能否被发现，不能只数角色有多少。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "SillyTavern",
+        "JanitorAI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "SillyTavern 官方文档",
+          "url": "https://docs.sillytavern.app/",
+          "basis": "primary"
+        },
+        {
+          "title": "JanitorAI 产品首页",
+          "url": "https://janitorai.com/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-replika",
+    "title": "Replika 的持续陪伴体验",
+    "recordType": "research",
+    "groupId": "research-companions-and-stories",
+    "source": "AI 陪伴与互动叙事 · 产品对照",
+    "tags": [
+      "AI 情感陪伴",
+      "AI Companion",
+      "关系",
+      "虚拟角色"
+    ],
+    "keywords": [
+      "Replika",
+      "AI 伴侣",
+      "情感陪伴",
+      "关系连续性"
+    ],
+    "body": "Replika 把产品呈现为可以持续聊天的 AI 朋友或伴侣，通过同一个角色承接日常交流。产品页也把形象定制、语音等功能放在陪伴体验里。这些是官方介绍的能力和定位，不能据此断言记忆准确率、心理收益或用户留存。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Replika"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Replika 产品首页",
+          "url": "https://replika.com/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-dungeon",
+    "title": "AI Dungeon 的互动叙事",
+    "recordType": "research",
+    "groupId": "research-companions-and-stories",
+    "source": "AI 陪伴与互动叙事 · 产品对照",
+    "tags": [
+      "AI Roleplay",
+      "AI Dungeon",
+      "互动小说",
+      "叙事"
+    ],
+    "keywords": [
+      "AI Dungeon",
+      "Latitude",
+      "互动叙事",
+      "故事卡",
+      "剧情推演"
+    ],
+    "body": "AI Dungeon 的核心是持续推进一段互动故事。官方指南把玩家的行动、说话和续写区分开来，也提供用于补充世界或角色设定的 Story Cards。讨论它时，可以具体聊选择怎么带来后果、设定能否在长篇故事里保持一致。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "AI Dungeon",
+        "Latitude"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "AI Dungeon 官方指南",
+          "url": "https://help.aidungeon.com/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-companion-vs-dungeon",
+    "title": "陪伴与互动叙事的两种承诺",
+    "recordType": "research",
+    "groupId": "research-companions-and-stories",
+    "source": "AI 陪伴与互动叙事 · 产品对照",
+    "tags": [
+      "AI Roleplay",
+      "情感陪伴",
+      "角色关系",
+      "互动叙事"
+    ],
+    "keywords": [
+      "Replika",
+      "AI Dungeon",
+      "Roleplay 和陪伴",
+      "陪伴与故事",
+      "产品定位",
+      "互动小说"
+    ],
+    "body": "把 Replika 和 AI Dungeon 摆在一起看，前者的体验围绕与同一个对象的关系延续，后者围绕玩家做出选择之后故事怎么变。两者都需要长期一致性，但前者更需要记住相处过什么，后者更需要记住已经发生的事与世界规则。这个区分是分析产品的角度，不能从中推导谁的记忆实现更强或谁的留存更好。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "Replika",
+        "AI Dungeon"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Replika 产品首页",
+          "url": "https://replika.com/",
+          "basis": "primary"
+        },
+        {
+          "title": "AI Dungeon 官方指南",
+          "url": "https://help.aidungeon.com/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-chai-vs-characterai-iap",
+    "title": "CHAI 与 Character.AI 的同期移动内购对照",
+    "recordType": "research",
+    "groupId": "research-mobile-market",
+    "source": "AI Roleplay · 移动内购对照",
+    "tags": [
+      "AI Roleplay",
+      "商业化",
+      "移动内购",
+      "竞品"
+    ],
+    "keywords": [
+      "CHAI",
+      "Character.AI",
+      "C.ai",
+      "Sensor Tower",
+      "内购",
+      "营收",
+      "收入",
+      "变现",
+      "IAP"
+    ],
+    "body": "Sensor Tower 在 2026 年第一季度全球 AI 陪伴应用对照里，估算 CHAI 的移动内购金额高于 Character.AI。这个结果只适合比较同一时期、同一渠道的样本。不能把这张图和法院资料里披露的公司总营收、广告收入或利润直接比较，也不能把排名延伸到当前月份。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "CHAI",
+        "Character.AI"
+      ],
+      "asOf": "2026-03-31",
+      "sources": [
+        {
+          "title": "Sensor Tower：AI 伴侣应用全球移动内购对比，2026 年第一季度",
+          "url": "https://sensortower.com/ko/blog/ai-companion-app-revenue-grows",
+          "basis": "estimate"
+        }
+      ],
+      "scope": "全球 App Store 与 Google Play 内购估算，第一季度，不含广告、Web 付费与其他安卓渠道",
+      "aliases": [
+        "C.ai",
+        "cai"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-characterai-revenue",
+    "title": "Character.AI 的公司营收与商业化",
+    "recordType": "research",
+    "groupId": "research-characterai-case",
+    "source": "Character.AI · 经营案例",
+    "tags": [
+      "AI Roleplay",
+      "商业化",
+      "公司营收",
+      "订阅",
+      "广告"
+    ],
+    "keywords": [
+      "Character.AI",
+      "C.ai",
+      "营收",
+      "收入",
+      "订阅",
+      "广告",
+      "法院文件",
+      "首日声明",
+      "年收入"
+    ],
+    "body": "按 Character Technologies 于 2026 年 10 月提交的首日声明，2024 和 2025 年公司营收约分别为 740 万和 2360 万美元。2026 年 8 月约 530 万美元，其中订阅约 280 万、广告约 250 万。营收和利润是两回事；这些数字属于历史公司披露，与移动内购估算不在同一口径。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Character.AI",
+        "Character Technologies"
+      ],
+      "asOf": "2026-10-13",
+      "sources": [
+        {
+          "title": "Character Technologies 首日声明，2026-10-13",
+          "url": "https://cases.stretto.com/public/x936/14939/PLEADINGS/1493910132680000000119.pdf",
+          "basis": "primary"
+        }
+      ],
+      "scope": "首日声明披露的公司营收，单位美元，年度数据与 2026 年 8 月单月数据",
+      "aliases": [
+        "C.ai",
+        "cai"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-characterai-procedure",
+    "title": "Character.AI 的 Chapter 11 时间点",
+    "recordType": "research",
+    "groupId": "research-characterai-case",
+    "source": "Character.AI · 经营案例",
+    "tags": [
+      "AI Roleplay",
+      "Chapter 11",
+      "公司经营"
+    ],
+    "keywords": [
+      "Character.AI",
+      "C.ai",
+      "破产",
+      "重组",
+      "收购",
+      "关停",
+      "Chapter 11"
+    ],
+    "body": "Character Technologies 于 2026 年 10 月启动 Chapter 11 程序。申请、提出资产交易、法院批准、实际交割和用户服务变更是不同事件。谈到交易或服务的最新状态时，需要另查相应日期的法院文件和服务公告。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Character.AI",
+        "Character Technologies"
+      ],
+      "asOf": "2026-10-13",
+      "sources": [
+        {
+          "title": "Character Technologies 首日声明，2026-10-13",
+          "url": "https://cases.stretto.com/public/x936/14939/PLEADINGS/1493910132680000000119.pdf",
+          "basis": "primary"
+        }
+      ],
+      "scope": "截至 2026 年 10 月 13 日的首日程序记录",
+      "aliases": [
+        "C.ai",
+        "cai"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-creator-portability",
+    "title": "角色创作与分享的验证方向",
+    "recordType": "research",
+    "groupId": "research-tavern-workflow",
+    "source": "酒馆与角色平台 · 产品对照",
+    "tags": [
+      "AI Roleplay",
+      "角色卡",
+      "创作者生态",
+      "内容平台"
+    ],
+    "keywords": [
+      "AI Roleplay",
+      "酒馆",
+      "角色创作",
+      "角色卡",
+      "内容发现",
+      "迁移",
+      "创作者"
+    ],
+    "body": "一个值得验证的假设是，降低发布和开始聊天的门槛之后，仍有一部分创作者会在意角色卡能不能带走、改完能不能继续在别处用。判断这个需求，适合看实际发生的导出、重复编辑和分享行为，以及读者看见角色以后有没有开始聊天。这里没有实际转化率或已验证的结果。",
+    "evidence": {
+      "kind": "hypothesis",
+      "subjects": [
+        "角色创作工具",
+        "角色内容平台"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "SillyTavern 官方文档",
+          "url": "https://docs.sillytavern.app/",
+          "basis": "primary"
+        },
+        {
+          "title": "JanitorAI 产品首页",
+          "url": "https://janitorai.com/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-zeta",
+    "title": "zeta 的情境开场与出海",
+    "recordType": "research",
+    "groupId": "research-zeta",
+    "source": "zeta 的情境开场与出海",
+    "tags": [
+      "AI Roleplay",
+      "互动小说",
+      "韩国",
+      "日本"
+    ],
+    "keywords": [
+      "제타",
+      "开场",
+      "世界观",
+      "本地化"
+    ],
+    "body": "Scatter Lab 的 zeta 让玩家先选择一个已有角色关系和冲突的情境，再设定自己的身份进入故事。创作者也可以设计世界观和起始场景。Sensor Tower 观察到日本市场先有自然搜索，后来加大广告投放；这些变化同时发生，公开资料不足以拆清是哪项带来了增长。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "zeta",
+        "Scatter Lab"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "zeta 官网",
+          "url": "https://zeta-ai.io/en/announcements/13632",
+          "basis": "primary"
+        },
+        {
+          "title": "Sensor Tower 全球移动内购对比",
+          "url": "https://sensortower.com/ko/blog/ai-companion-app-revenue-grows",
+          "basis": "estimate"
+        }
+      ],
+      "aliases": [
+        "제타"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-tipsy",
+    "title": "Tipsy Chat 的故事与消费额度",
+    "recordType": "research",
+    "groupId": "research-tipsy",
+    "source": "Tipsy Chat 的故事与消费额度",
+    "tags": [
+      "AI Roleplay",
+      "互动小说",
+      "商业化",
+      "付费"
+    ],
+    "keywords": [
+      "Tipsy",
+      "宝石",
+      "蓝宝石",
+      "长记忆",
+      "章节",
+      "高成本模型"
+    ],
+    "body": "Tipsy 把角色、背景、声音与剧情时刻组织成可创作的故事。订阅 FAQ 描述了免费获得的宝石、订阅额度和部分高级能力的额外消耗，长记忆与高成本模型可以是分档依据。按对话轮付费能控制高开销，但是否会在故事推进时打断体验，需要观察实际的章节完成和续购。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Tipsy Chat"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Tipsy 订阅 FAQ",
+          "url": "https://tipsy.chat/subscription/faq",
+          "basis": "primary"
+        },
+        {
+          "title": "Tipsy 产品页",
+          "url": "https://apps.apple.com/gh/app/tipsy-live-your-story/id6572296119",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "Tipsy"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-ooc",
+    "title": "OOC 的可玩动漫",
+    "recordType": "research",
+    "groupId": "research-ooc",
+    "source": "OOC 的可玩动漫",
+    "tags": [
+      "AI Roleplay",
+      "互动叙事",
+      "北美",
+      "本地化"
+    ],
+    "keywords": [
+      "OOC The Playable Anime",
+      "可玩的动漫",
+      "Wrtn",
+      "Crack",
+      "キャラぷ"
+    ],
+    "body": "Wrtn 的 OOC: The Playable Anime 面向北美，用动漫题材、具体情境和角色关系承接玩家的创作或游玩。韩国 Crack 与日本 Kyarapu 同属 Wrtn 的互动故事业务。每个地区有自己的产品入口、作者政策和统计范围，判断本地化成效要逐个比较。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "OOC",
+        "Wrtn"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Wrtn 的北美发布公告",
+          "url": "https://businesswire.com/news/home/20260415199414/en/Wrtn-Technologies-Unveils-its-AI-Interactive-Storytelling-Platform-OOC-The-Playable-Anime-in-North-America",
+          "basis": "primary"
+        },
+        {
+          "title": "OOC 官网",
+          "url": "https://ooc.ai/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-chai-product",
+    "title": "CHAI 的社区与推理经营",
+    "recordType": "research",
+    "groupId": "research-chai-product",
+    "source": "CHAI 的社区与推理经营",
+    "tags": [
+      "AI Roleplay",
+      "角色社区",
+      "商业化",
+      "推理成本"
+    ],
+    "keywords": [
+      "UGC",
+      "广告",
+      "订阅",
+      "移动优先",
+      "角色创作"
+    ],
+    "body": "CHAI 是较早采用移动端角色社区与用户创作的产品。公司披露可用于理解订阅、广告与推理效率在其经营里的作用。移动内购估算与公司自报的年化收入是两种指标，免费与付费队列的成本、审核和投放还需要单独的数据。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "CHAI",
+        "Chai Research"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "CHAI 公司披露",
+          "url": "https://chai-research.com/company-facts",
+          "basis": "primary"
+        },
+        {
+          "title": "CHAI Google Play 页面",
+          "url": "https://play.google.com/store/apps/details?id=com.Beauchamp.Messenger.external&hl=en_US",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-polybuzz",
+    "title": "PolyBuzz 的角色发现入口",
+    "recordType": "research",
+    "groupId": "research-polybuzz",
+    "source": "PolyBuzz 的角色发现入口",
+    "tags": [
+      "AI Roleplay",
+      "角色社区",
+      "角色发现",
+      "商业化"
+    ],
+    "keywords": [
+      "Poly.AI",
+      "角色目录",
+      "题材搜索",
+      "角色发现"
+    ],
+    "body": "PolyBuzz 原名 Poly.AI，与同名企业语音公司分别识别。产品把角色目录、分类和具体开场作为发现入口。角色目录规模说明供给；要观察目录是否带来复访，可以跟踪搜索后进入一个场景的比例，以及玩家次日是否回到同一线程。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "PolyBuzz"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "PolyBuzz 产品 FAQ",
+          "url": "https://polybuzz.ai/faq",
+          "basis": "primary"
+        },
+        {
+          "title": "PolyBuzz 的更名公告",
+          "url": "https://prweb.com/releases/polyai-rebrands-to-polybuzz-becoming-the-best-ai-chat--ai-roleplay-platform-302358806.html",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "Poly.AI"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-talkie",
+    "title": "Talkie 的角色卡与跨市场口径",
+    "recordType": "research",
+    "groupId": "research-talkie",
+    "source": "Talkie 的角色卡与跨市场口径",
+    "tags": [
+      "AI Roleplay",
+      "收藏机制",
+      "商业化",
+      "角色社区"
+    ],
+    "keywords": [
+      "Talkie Lab",
+      "卡牌",
+      "收藏品",
+      "组合营收",
+      "星野"
+    ],
+    "body": "Talkie 的互动路径可以从发现角色和聊天延伸到卡牌收藏、虚拟物品或交易。MiniMax 招股资料中的 Talkie 与星野组合收入需要按原披露读；单市场收入、卡牌带来的留存增量以及另一个 Talkie Lab 的商店表现分别需要独立数据。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Talkie",
+        "星野",
+        "MiniMax"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Talkie 产品 FAQ",
+          "url": "https://talkie-ai.com/faq",
+          "basis": "primary"
+        },
+        {
+          "title": "MiniMax 招股书",
+          "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/1231/2025123100025.pdf",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-emochi",
+    "title": "Emochi 的动漫角色与获客漏斗",
+    "recordType": "research",
+    "groupId": "research-emochi",
+    "source": "Emochi 的动漫角色与获客漏斗",
+    "tags": [
+      "AI Roleplay",
+      "角色社区",
+      "动漫",
+      "获客"
+    ],
+    "keywords": [
+      "Kaon AI",
+      "动漫角色",
+      "首聊",
+      "续聊"
+    ],
+    "body": "Emochi 以设定各异的动漫角色和故事作为入口，玩家也能配置人物背景与个性。看这个产品的获客，可以把浏览角色、第一次有效开聊、回到同一个角色和实际付费分别观察。官网和商店展示的是功能及商品；评价只用于找待复测的问题。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Emochi",
+        "FlowGPT"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Emochi 官网",
+          "url": "https://emochi.com/",
+          "basis": "primary"
+        },
+        {
+          "title": "FlowGPT 对 Emochi 的产品说明",
+          "url": "https://flowgpt.com/guide/emochi",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-crushie",
+    "title": "Crushie AI 的关系与故事付费",
+    "recordType": "research",
+    "groupId": "research-crushie",
+    "source": "Crushie AI 的关系与故事付费",
+    "tags": [
+      "AI Roleplay",
+      "情感陪伴",
+      "商业化",
+      "互动故事"
+    ],
+    "keywords": [
+      "Gem Pass",
+      "宝石",
+      "订阅",
+      "浪漫陪伴"
+    ],
+    "body": "Crushie AI 的不同商店文案分别强调浪漫陪伴和让原创角色进入故事。公开商品有会员、宝石和 Gem Pass。理解商业效果要分别看付费展示获客、进入首场戏的转化、复购和净回收。同名相近的 CrushOn.AI 属于另一个案例。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Crushie AI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Crushie AI App Store 页面",
+          "url": "https://apps.apple.com/us/app/crushie-ai-chat-companion/id6741790631",
+          "basis": "primary"
+        },
+        {
+          "title": "Crushie AI Google Play 页面",
+          "url": "https://play.google.com/store/apps/details?id=ai.onspace.app&hl=en_US",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "Crushie"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-dokichat",
+    "title": "Dokichat 的角色搜索与持续付费",
+    "recordType": "research",
+    "groupId": "research-dokichat",
+    "source": "Dokichat 的角色搜索与持续付费",
+    "tags": [
+      "AI Roleplay",
+      "角色发现",
+      "东南亚",
+      "商业化"
+    ],
+    "keywords": [
+      "Hearts",
+      "月卡",
+      "续聊",
+      "记忆",
+      "东南亚"
+    ],
+    "body": "Dokichat 的商店以浪漫角色和互动故事为入口，并展示 Hearts 和会员。研究不同地区的获客与商业规模，应该分别按同一市场和同期分母比较搜索命中、有效首聊、续玩与付费。免费额度、现有 Hearts 和已有角色的连续性，都可能影响改收费后的体验。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Dokichat"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Dokichat App Store 页面",
+          "url": "https://apps.apple.com/us/app/dokichat-romantic-ai-chat/id6642711442",
+          "basis": "primary"
+        },
+        {
+          "title": "Dokichat Google Play 页面",
+          "url": "https://play.google.com/store/apps/details?id=app.doki.dokichat&hl=en_US",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-whispy",
+    "title": "Whispy AI 的记忆承诺",
+    "recordType": "research",
+    "groupId": "research-whispy",
+    "source": "Whispy AI 的记忆承诺",
+    "tags": [
+      "AI Roleplay",
+      "情感陪伴",
+      "角色记忆",
+      "互动故事"
+    ],
+    "keywords": [
+      "Whispy",
+      "Cozy Chat",
+      "Create Your Story",
+      "长期记忆"
+    ],
+    "body": "Whispy 把记得用户说过的小事作为卖点，商店入口同时展示角色设定与故事续写。同一个 iOS 产品 ID 曾使用不同标题，定位变化可从文案观察，是否让模型更准确要测同一段关系跨天续接时的人物、时间线和已发生事件。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Whispy AI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Whispy AI App Store 页面",
+          "url": "https://apps.apple.com/us/app/whispy-ai-create-your-story/id6770413766",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "Whispy"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-xingye",
+    "title": "星野的智能体社区与收藏资产",
+    "recordType": "research",
+    "groupId": "research-xingye",
+    "source": "星野的智能体社区与收藏资产",
+    "tags": [
+      "AI Roleplay",
+      "中国大陆",
+      "智能体社区",
+      "收藏机制"
+    ],
+    "keywords": [
+      "星野AI",
+      "卡牌",
+      "虚拟币",
+      "交易",
+      "Talkie"
+    ],
+    "body": "星野的入口是找角色、创建与分享智能体并进入开放剧情。其卡牌服务把一部分会话之外的价值放在收藏资产上。财务材料公布的 Talkie 与星野组合收入不能分解成大陆星野的单品收入，也不能从组合增长倒推卡牌贡献。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "星野",
+        "MiniMax"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "星野 App Store 页面",
+          "url": "https://apps.apple.com/cn/app/id6463076337",
+          "basis": "primary"
+        },
+        {
+          "title": "星野卡牌服务协议",
+          "url": "https://m.xingyeai.com/static/card_service",
+          "basis": "primary"
+        },
+        {
+          "title": "MiniMax 招股书",
+          "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/1231/2025123100025.pdf",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-maoxiang",
+    "title": "猫箱的角色与剧情入口",
+    "recordType": "research",
+    "groupId": "research-maoxiang",
+    "source": "猫箱的角色与剧情入口",
+    "tags": [
+      "AI Roleplay",
+      "中国大陆",
+      "互动剧情",
+      "移动内购"
+    ],
+    "keywords": [
+      "角色滑动",
+      "心动AI",
+      "月活",
+      "短剧",
+      "IAP"
+    ],
+    "body": "猫箱在中国大陆定位为 AI 角色扮演与互动剧情产品。Sensor Tower 的 2026 年一季度全球移动内购样本中排第四。商店内购和中国单月活跃是不同的样本，不能用后一时期全球内购排名来判断其国内用户活跃是否超过星野。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "猫箱",
+        "星野"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "猫箱 App Store 页面",
+          "url": "https://apps.apple.com/cn/app/id6475000292",
+          "basis": "primary"
+        },
+        {
+          "title": "Sensor Tower 全球移动内购对比",
+          "url": "https://sensortower.com/ko/blog/ai-companion-app-revenue-grows",
+          "basis": "estimate"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-dream-island",
+    "title": "筑梦岛把网文人物变成互动场景",
+    "recordType": "research",
+    "groupId": "research-dream-island",
+    "source": "筑梦岛把网文人物变成互动场景",
+    "tags": [
+      "AI Roleplay",
+      "中国大陆",
+      "网文",
+      "多人剧情"
+    ],
+    "keywords": [
+      "梦屋",
+      "小剧场",
+      "梦境",
+      "网文角色"
+    ],
+    "body": "筑梦岛把网文式人物带进单聊、多人梦屋和小剧场，也可以把对话保留为可分享与续写的梦境。它适合用来讨论既有人物设定怎样进入互动场景，以及小团队先验证单角色、单剧场之后再扩大角色库。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "筑梦岛"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "筑梦岛 App Store 页面",
+          "url": "https://apps.apple.com/cn/app/id6465838500",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-maopao",
+    "title": "冒泡鸭的产品退出案例",
+    "recordType": "research",
+    "groupId": "research-maopao",
+    "source": "冒泡鸭的产品退出案例",
+    "tags": [
+      "AI Roleplay",
+      "中国大陆",
+      "互动剧情",
+      "停运"
+    ],
+    "keywords": [
+      "退出",
+      "关停",
+      "资源投入",
+      "阶跃星辰"
+    ],
+    "body": "冒泡鸭是阶跃星辰的消费端角色与开放剧情产品，公开留档转述了 2025 年 11 月 5 日停止运营的通知。历史上有角色创建、滑动发现与带目标的互动剧情。用这个案例可以讨论服务退出和资源选择；它缺少可归因的留存、成本和盈亏，不能据此诊断停运的单一原因。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "冒泡鸭",
+        "阶跃星辰"
+      ],
+      "asOf": "2025-11-05",
+      "sources": [
+        {
+          "title": "公开报道保留的冒泡鸭停运通知",
+          "url": "https://m.zhidx.com/p/521443.html",
+          "basis": "reported"
+        }
+      ],
+      "scope": "产品停止运营的事件日期，非公司财务结论"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-crack",
+    "title": "Crack 的韩国网文和作者供给",
+    "recordType": "research",
+    "groupId": "research-crack",
+    "source": "Crack 的韩国网文和作者供给",
+    "tags": [
+      "AI Roleplay",
+      "韩国",
+      "网文",
+      "创作者生态"
+    ],
+    "keywords": [
+      "크랙",
+      "作者变现",
+      "角色",
+      "作品结算",
+      "互动网文"
+    ],
+    "body": "韩国 Crack 的主要入口是选择角色或网文场景，让对话改变后续情节。创作者也能制作角色、开场和场景。作者奖励和推荐机制属于内容供给，需要看作品的重复发布、首聊和结算；日本及北美版要分别核对本地规则。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Crack",
+        "Wrtn"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Crack 韩国官网",
+          "url": "https://crack.wrtn.ai/",
+          "basis": "primary"
+        },
+        {
+          "title": "Crack 韩国 Google Play 页面",
+          "url": "https://play.google.com/store/apps/details?id=com.wrtn.character&gl=KR",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "크랙"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-kyarapu",
+    "title": "Kyarapu 的日本创作入口",
+    "recordType": "research",
+    "groupId": "research-kyarapu",
+    "source": "Kyarapu 的日本创作入口",
+    "tags": [
+      "AI Roleplay",
+      "日本",
+      "角色创作",
+      "本地化"
+    ],
+    "keywords": [
+      "キャラぷ",
+      "日文角色",
+      "创作者",
+      "同题材本地化"
+    ],
+    "body": "キャラぷ（Kyarapu）是 Wrtn 在日本的角色聊天和互动故事产品。日文商店与发行方公告可见本地作品及限定活动。讨论日本市场时，可以用同题材、同模型比较本地作者写的情境与直译情境，跟踪首章完成率及活动后的复访。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Kyarapu",
+        "Wrtn"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Kyarapu 日本发行方公告",
+          "url": "https://prtimes.jp/main/html/rd/p/000000078.000119361.html",
+          "basis": "primary"
+        },
+        {
+          "title": "Kyarapu 日本 App Store 页面",
+          "url": "https://apps.apple.com/jp/app/id6744629457",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "キャラぷ"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-nomi",
+    "title": "Nomi 的可见记忆",
+    "recordType": "research",
+    "groupId": "research-nomi",
+    "source": "Nomi 的可见记忆",
+    "tags": [
+      "AI Roleplay",
+      "情感陪伴",
+      "长期记忆",
+      "可纠错"
+    ],
+    "keywords": [
+      "Mind Map",
+      "记忆图谱",
+      "记忆纠错",
+      "关系连续性"
+    ],
+    "body": "Nomi 围绕同一个伴侣持续聊天，Mind Map 2.0 把部分长期记忆开放给用户查看和编辑。可见记忆给了用户纠正错误的入口，实际是否改善续聊体验可以看跨天召回准确性和纠错后的继续率。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Nomi"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Nomi Mind Map 2.0 官方更新",
+          "url": "https://nomi.ai/updates/mind-map-2-0-bringing-nomi-memory-into-view",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-kindroid",
+    "title": "Kindroid 的角色调校与记忆分档",
+    "recordType": "research",
+    "groupId": "research-kindroid",
+    "source": "Kindroid 的角色调校与记忆分档",
+    "tags": [
+      "AI Roleplay",
+      "情感陪伴",
+      "角色调校",
+      "订阅"
+    ],
+    "keywords": [
+      "长记忆",
+      "试用",
+      "只读",
+      "免费额度"
+    ],
+    "body": "Kindroid 面向愿意深度设置角色和持续交流的人。帮助中心分别说明角色配置与订阅权益；2026 年 11 月的价格帮助页描述了有限预览和试用结束后的只读状态。地区和时期会影响额度与试用方式，评估改版需要同时测首次感到角色记得我所需的时间与转化。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Kindroid"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Kindroid 订阅帮助",
+          "url": "https://kindroid.ai/docs/article/subscriptions",
+          "basis": "primary"
+        },
+        {
+          "title": "Kindroid 使用帮助",
+          "url": "https://kindroid.ai/docs/article/welcome",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-tolan",
+    "title": "Tolan 的现实日常与语音陪伴",
+    "recordType": "research",
+    "groupId": "research-tolan",
+    "source": "Tolan 的现实日常与语音陪伴",
+    "tags": [
+      "AI Roleplay",
+      "情感陪伴",
+      "语音",
+      "现实日常"
+    ],
+    "keywords": [
+      "外星伙伴",
+      "连续语音",
+      "现实连接",
+      "跨日记忆"
+    ],
+    "body": "Tolan 用外星伙伴建立初次接触，延续对话的话题来自用户现实中的日常生活。公开介绍把语音和记住日常小事放在体验里。评估这类产品时，可以跟踪同一对象的跨日话题承接、语音体验和单位成本。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Tolan"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Tolan 产品发布稿",
+          "url": "https://tolans.com/relay/introducing-tolan",
+          "basis": "primary"
+        },
+        {
+          "title": "供应商发布的 Tolan 案例",
+          "url": "https://openai.com/index/tolan",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-saylo",
+    "title": "Saylo 把角色互动接到可分享作品",
+    "recordType": "research",
+    "groupId": "research-saylo",
+    "source": "Saylo 把角色互动接到可分享作品",
+    "tags": [
+      "AI Roleplay",
+      "互动叙事",
+      "多模态",
+      "分享"
+    ],
+    "keywords": [
+      "Clips",
+      "Visual Stories",
+      "章节",
+      "互动漫画"
+    ],
+    "body": "Saylo 的商店展示从角色开聊到创作故事与发布 Clips 的入口，不同客户端的描述有所不同。这个路径适合观察互动结果能否带来可归因的新开场。图文、漫画和视频的生成耗时与有效成品成本应分别统计。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Saylo"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Saylo 官网",
+          "url": "https://sayloai.com/",
+          "basis": "primary"
+        },
+        {
+          "title": "Saylo Google Play 页面",
+          "url": "https://play.google.com/store/apps/details?id=com.xverse.aistory&hl=en_US",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-roletopia",
+    "title": "Roletopia 的预制主线和局部共演",
+    "recordType": "research",
+    "groupId": "research-roletopia",
+    "source": "Roletopia 的预制主线和局部共演",
+    "tags": [
+      "AI Roleplay",
+      "互动小说",
+      "预制分支",
+      "共演"
+    ],
+    "keywords": [
+      "分支",
+      "互动小说",
+      "预生成",
+      "AI共演"
+    ],
+    "body": "Roletopia 用预制分支和结局保证故事能完整走一遍，在部分场景加入 AI 共演角色。官方定价分别说明故事权益和共演额度。适合用同一个故事比较有无共演，检验哪些互动节点值得增加运行时推理和等待。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Roletopia"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Roletopia 产品介绍",
+          "url": "https://roletopia.ai/en/about",
+          "basis": "primary"
+        },
+        {
+          "title": "Roletopia 定价",
+          "url": "https://roletopia.ai/en/pricing",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-fableai",
+    "title": "FableAI 的合作文字 RPG",
+    "recordType": "research",
+    "groupId": "research-fableai",
+    "source": "FableAI 的合作文字 RPG",
+    "tags": [
+      "AI Roleplay",
+      "互动故事",
+      "文字RPG",
+      "多人协作"
+    ],
+    "keywords": [
+      "骰子",
+      "组队",
+      "游戏叙述者",
+      "Gems"
+    ],
+    "body": "FableAI 是开放输入的文字 RPG，公开介绍包含叙述者、可选骰子及实时合作。对多人剧情按生成资源收费时，一名玩家的额度耗尽可能影响整队进展。适合比较单人与双人完成同一冒险的成功推进轮次。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "FableAI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "FableAI 官网",
+          "url": "https://fableai.app/",
+          "basis": "primary"
+        },
+        {
+          "title": "FableAI App Store 页面",
+          "url": "https://apps.apple.com/us/app/fableai-ai-story-text-rpg/id6484402877",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-ifable",
+    "title": "iFable 的多角色与视觉高光",
+    "recordType": "research",
+    "groupId": "research-ifable",
+    "source": "iFable 的多角色与视觉高光",
+    "tags": [
+      "AI Roleplay",
+      "互动故事",
+      "动漫",
+      "多模态"
+    ],
+    "keywords": [
+      "CG",
+      "多角色",
+      "配音",
+      "图像节点"
+    ],
+    "body": "iFable 的 iOS 产品页强调创建动漫角色、在同一场景放入多个角色，以及语音、音效和动态图像。图像能不能强化某次剧情转折，可以只在一个关键节点加图做对照，分别观察等待、剧情回忆和复访。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "iFable"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "iFable App Store 页面",
+          "url": "https://apps.apple.com/us/app/ifable-enjoy-play-bonding/id6737508643",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-friends-fables",
+    "title": "Friends & Fables 的多人跑团",
+    "recordType": "research",
+    "groupId": "research-friends-fables",
+    "source": "Friends & Fables 的多人跑团",
+    "tags": [
+      "AI Roleplay",
+      "跑团",
+      "互动故事",
+      "多人协作"
+    ],
+    "keywords": [
+      "Franz",
+      "AI主持",
+      "D&D",
+      "战役",
+      "游戏状态"
+    ],
+    "body": "Friends & Fables 用 AI 主持 Franz 跑文字战役，可以选世界、设置角色并邀请朋友。多人产品适合关注接受邀请后的实际开局、第二次共同回来续玩，以及角色、物品和选择结果有没有接上。公开的免费轮次和会员档位只能说明商品设计。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Friends & Fables"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Friends & Fables 官网",
+          "url": "https://fables.gg/",
+          "basis": "primary"
+        },
+        {
+          "title": "Friends & Fables 定价",
+          "url": "https://fables.gg/pricing",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-bside",
+    "title": "Bside 的移动故事和桌面伙伴",
+    "recordType": "research",
+    "groupId": "research-bside",
+    "source": "Bside 的移动故事和桌面伙伴",
+    "tags": [
+      "AI Roleplay",
+      "桌面陪伴",
+      "互动故事",
+      "角色模拟"
+    ],
+    "keywords": [
+      "Desktop Mate",
+      "Biibit",
+      "装扮",
+      "离线事件"
+    ],
+    "body": "Kotoko 的移动 Bside 以角色定制、聊天、装扮和派出活动承接故事；Steam 的 Bside: Desktop Mate 是桌面伙伴入口。研究两者时，可比较用户主动进场和角色常驻桌面的体验，用次日主动返回判断角色事件的价值。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Bside",
+        "Kotoko AI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Kotoko 官网",
+          "url": "https://kotoko.ai/",
+          "basis": "primary"
+        },
+        {
+          "title": "Bside 移动版产品页",
+          "url": "https://apps.apple.com/us/app/bside-chat-story-simulator/id6757434275",
+          "basis": "primary"
+        },
+        {
+          "title": "Bside 桌面版产品页",
+          "url": "https://store.steampowered.com/app/3649950/Bside_Desktop_Mate",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-aivilization",
+    "title": "Aivilization 与 AI小镇：星原",
+    "recordType": "research",
+    "groupId": "research-aivilization",
+    "source": "Aivilization 与 AI小镇：星原",
+    "tags": [
+      "AI Roleplay",
+      "多智能体",
+      "AI世界",
+      "世界模拟"
+    ],
+    "keywords": [
+      "港科大",
+      "虚拟社会",
+      "角色自主生活",
+      "多智能体沙盒"
+    ],
+    "body": "港科大公开的 Aivilization 让参与者配置 AI 居民并观察其社会互动。后续「AI小镇：星原」的更名和开放预约说明面向用户的产品方向。研究中的 AI 智能体数量和实验成本分别属于模拟对象与实验口径，产品收入需要其他证据。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Aivilization",
+        "AI小镇",
+        "星原"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "港科大项目发布稿",
+          "url": "https://hkust.edu.hk/news/hkust-launches-worlds-largest-ai-powered-educational-sandbox-game-advancing-ai-literacy-and",
+          "basis": "primary"
+        },
+        {
+          "title": "AI小镇更名公告",
+          "url": "https://aitown.com.cn/news/rename-to-xingyuan",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-tavernai",
+    "title": "TavernAI 与 SillyTavern 的谱系",
+    "recordType": "research",
+    "groupId": "research-tavernai",
+    "source": "TavernAI 与 SillyTavern 的谱系",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "模型后端",
+      "开源前端"
+    ],
+    "keywords": [
+      "酒馆历史",
+      "TavernAI-v1",
+      "角色卡",
+      "World Info",
+      "前端谱系"
+    ],
+    "body": "SillyTavern 官方文档把起点追溯到 TavernAI 1.2.8。TavernAI 旧仓库存放 1.x 项目，当前仓库有自己的版本发布与问题追踪。复用一张角色卡时，预设、世界信息的注入方式和模型后端都会影响入戏效果，兼容性要按各版本测试。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "TavernAI",
+        "SillyTavern"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "TavernAI 仓库",
+          "url": "https://github.com/TavernAI/TavernAI",
+          "basis": "primary"
+        },
+        {
+          "title": "TavernAI 1.x 仓库",
+          "url": "https://github.com/TavernAI/TavernAI-v1",
+          "basis": "primary"
+        },
+        {
+          "title": "SillyTavern 文档",
+          "url": "https://docs.sillytavern.app/",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-chub",
+    "title": "Chub AI 的角色卡库与托管聊天",
+    "recordType": "research",
+    "groupId": "research-chub",
+    "source": "Chub AI 的角色卡库与托管聊天",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "角色卡",
+      "世界书",
+      "托管"
+    ],
+    "keywords": [
+      "角色卡库",
+      "lorebook",
+      "导出",
+      "自带模型",
+      "在线试聊"
+    ],
+    "body": "Chub 把角色发现、发布和站内开聊放在一起。文档分别说明选用外部模型、创建角色与使用 lorebook。模型、角色卡、聊天记录和世界设定是不同对象，导出聊天 JSONL 只能证明带走了会话记录。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "Chub AI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Chub AI 使用文档",
+          "url": "https://docs.chub.ai/docs",
+          "basis": "primary"
+        },
+        {
+          "title": "Chub 世界书文档",
+          "url": "https://docs.chub.ai/docs/advanced-setups/lorebooks",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "Chub"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-spicychat",
+    "title": "SpicyChat 的托管酒馆体验",
+    "recordType": "research",
+    "groupId": "research-spicychat",
+    "source": "SpicyChat 的托管酒馆体验",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "托管",
+      "多角色"
+    ],
+    "keywords": [
+      "角色卡导入",
+      "群聊",
+      "长上下文",
+      "付费档位"
+    ],
+    "body": "SpicyChat 提供托管角色目录与开聊，并在帮助中心说明角色导入及多角色群聊。订阅可按模型、等待或上下文划分权益。长上下文的容量、事实召回准确度和每场成本需要分别测量。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "SpicyChat"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "SpicyChat 高级功能说明",
+          "url": "https://docs.spicychat.ai/product-guides/premium-features",
+          "basis": "primary"
+        },
+        {
+          "title": "SpicyChat 角色导入说明",
+          "url": "https://docs.spicychat.ai/advanced/importing-characters",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-crushon",
+    "title": "CrushOn.AI 的模型和额度分档",
+    "recordType": "research",
+    "groupId": "research-crushon",
+    "source": "CrushOn.AI 的模型和额度分档",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "托管",
+      "商业化"
+    ],
+    "keywords": [
+      "CrushOn",
+      "自选模型",
+      "长期记忆",
+      "Pro credits"
+    ],
+    "body": "CrushOn.AI 在托管角色互动中提供不同模型和对话额度。官网里基础与高级模型的用量规则需要分别看。验证多档付费的方式是让玩家在同一角色与场景里比较体验，同时观察额度消耗、实收费和取消，而不是只对比档位名称。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "CrushOn.AI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "CrushOn.AI 产品入口",
+          "url": "https://chat.crushon.ai/",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "CrushOn"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-story-world-podcast",
+    "title": "从角色聊天进入故事与世界",
+    "recordType": "research",
+    "groupId": "research-story-world-podcast",
+    "source": "从角色聊天进入故事与世界",
+    "tags": [
+      "AI Roleplay",
+      "行业趋势",
+      "互动故事",
+      "世界状态"
+    ],
+    "keywords": [
+      "405游局",
+      "角色到故事",
+      "连续剧情",
+      "世界状态",
+      "Patrick"
+    ],
+    "body": "《405 游局》访谈提出一种行业观察：有些产品开始把连续故事、角色关系和可变的世界状态作为体验承诺。把它当成产品假设时，可以观察玩家是否回来继续自己的剧情、此前选择是否留下后果，以及在不依赖新流量时能否获得复玩。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "《405 游局》",
+        "互动故事"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "《405 游局》播客文字稿",
+          "url": "https://mp.weixin.qq.com/s/VLjJCS9g3aCUY_8uCiRAcQ",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "405游局"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-market-q1",
+    "title": "全球 AI 陪伴应用的同期移动内购",
+    "recordType": "research",
+    "groupId": "research-market-q1",
+    "source": "全球 AI 陪伴应用的同期移动内购",
+    "tags": [
+      "AI Roleplay",
+      "移动内购",
+      "市场",
+      "商业化"
+    ],
+    "keywords": [
+      "Sensor Tower",
+      "IAP",
+      "Q1",
+      "排名",
+      "收入",
+      "内购",
+      "增长"
+    ],
+    "body": "在 Sensor Tower 的 2026 年第一季度图表里，PolyBuzz、CHAI 与 zeta 的双商店移动内购估算领先；紧随其后的是猫箱、Tipsy 与 Character.AI。按图读数约分别为 1,070 万、1,020 万、950 万、680 万、600 万和 520 万美元。zeta 在榜图的环比金额增量居首，和绝对金额排名是两回事。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "PolyBuzz",
+        "CHAI",
+        "zeta",
+        "猫箱",
+        "Tipsy Chat",
+        "Character.AI",
+        "Emochi",
+        "Crushie AI"
+      ],
+      "asOf": "2026-03-31",
+      "sources": [
+        {
+          "title": "Sensor Tower 全球移动内购对比",
+          "url": "https://sensortower.com/ko/blog/ai-companion-app-revenue-grows",
+          "basis": "estimate"
+        }
+      ],
+      "aliases": [
+        "Tipsy",
+        "C.ai",
+        "제타",
+        "Crushie",
+        "cai"
+      ],
+      "scope": "全球 App Store 与 Google Play 内购估算，图读近似值，不含广告、Web 与其他安卓渠道"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-leadership-metric",
+    "title": "怎么判断 AI Roleplay 后发反超",
+    "recordType": "research",
+    "groupId": "research-leadership-metric",
+    "source": "怎么判断 AI Roleplay 后发反超",
+    "tags": [
+      "AI Roleplay",
+      "行业趋势",
+      "商业化",
+      "生命周期"
+    ],
+    "keywords": [
+      "先发",
+      "后发",
+      "反超",
+      "Q4",
+      "Q1",
+      "排名",
+      "同口径"
+    ],
+    "body": "后发反超需要看到同一指标、同一口径的前后排序交换。近期调研对照了 2025 年第四季度与 2026 年第一季度全球移动内购，Tipsy 与 Character.AI、zeta 与猫箱出现交叉。变动只回答双商店内购如何变化。讨论用户、收入、利润或某个地区，分别查对应样本。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "Tipsy Chat",
+        "Character.AI",
+        "zeta",
+        "猫箱"
+      ],
+      "asOf": "2026-03-31",
+      "sources": [
+        {
+          "title": "Sensor Tower 全球移动内购对比",
+          "url": "https://sensortower.com/ko/blog/ai-companion-app-revenue-grows",
+          "basis": "estimate"
+        }
+      ],
+      "aliases": [
+        "Tipsy",
+        "C.ai",
+        "제타",
+        "cai"
+      ],
+      "scope": "双商店全球内购估算，2025 Q4 至 2026 Q1"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-tavern-map",
+    "title": "酒馆生态里是谁配好一局",
+    "recordType": "research",
+    "groupId": "research-tavern-map",
+    "source": "酒馆生态里是谁配好一局",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "产品地图",
+      "创作者生态"
+    ],
+    "keywords": [
+      "卡库",
+      "自部署",
+      "托管",
+      "前端",
+      "世界书",
+      "预设",
+      "主控",
+      "角色卡"
+    ],
+    "body": "比较酒馆产品时，可以按玩家开始前要做的事拆分。开源前端让玩家搭配模型、角色卡、主控、预设和世界书。卡库负责作品发布与发现。托管平台把找角色、设定与开聊组织在一起，有时也支持导入角色卡。用这三类工作理解，例如 Chub 同时覆盖卡库与站内试聊。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "SillyTavern",
+        "TavernAI",
+        "Chub AI",
+        "JanitorAI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "SillyTavern 角色设计文档",
+          "url": "https://docs.sillytavern.app/usage/core-concepts/characterdesign/",
+          "basis": "primary"
+        },
+        {
+          "title": "SillyTavern 世界书文档",
+          "url": "https://docs.sillytavern.app/usage/core-concepts/worldinfo/",
+          "basis": "primary"
+        },
+        {
+          "title": "Chub AI 使用文档",
+          "url": "https://docs.chub.ai/docs",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-market-metrics",
+    "title": "商业数据怎样做同口径比较",
+    "recordType": "research",
+    "groupId": "research-market-metrics",
+    "source": "商业数据怎样做同口径比较",
+    "tags": [
+      "AI Roleplay",
+      "市场",
+      "商业化",
+      "统计口径"
+    ],
+    "keywords": [
+      "Appark",
+      "Sensor Tower",
+      "Appfigures",
+      "MAU",
+      "ARR",
+      "LTV",
+      "下载",
+      "盈亏",
+      "内购"
+    ],
+    "body": "市场比较先对齐时间、端、地区、指标、覆盖与单位。Appark 卡片里的 Last Month 读数是第三方 iOS 快照，确切期间、渠道覆盖和结算定义需要核实。双商店移动内购、Web 订阅、广告、年化收入、公司确认收入和利润分列。下载数表示新增安装规模，当期收入还可能包括存量用户续费，不能把当期收入除以下载当付费率或 LTV。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "商店内购估算",
+        "公司经营披露"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "Appark 平台与口径入口",
+          "url": "https://appark.ai/",
+          "basis": "estimate"
+        },
+        {
+          "title": "Sensor Tower 全球移动内购对比",
+          "url": "https://sensortower.com/ko/blog/ai-companion-app-revenue-grows",
+          "basis": "estimate"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-market-return-loop",
+    "title": "用回访行为区分四种 AI Roleplay 产品",
+    "recordType": "research",
+    "groupId": "research-market-return-loop",
+    "source": "用回访行为区分四种 AI Roleplay 产品",
+    "tags": [
+      "AI Roleplay",
+      "行业趋势",
+      "情感陪伴",
+      "互动叙事",
+      "行业"
+    ],
+    "keywords": [
+      "产品形态",
+      "规模分析",
+      "用户行为",
+      "回访",
+      "留存",
+      "互动故事",
+      "世界模拟"
+    ],
+    "body": "可以按用户回来首先想做什么区分产品。伴侣产品延续与同一个角色的关系，角色社区继续发现和创作不同角色，互动故事继续上一段剧情，世界模拟回来查看新事件和之前干预的结果。一款产品可以同时有这些功能；选择核心回访理由之后，内容供给、状态管理和评估指标也会不同。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "AI 陪伴",
+        "角色平台",
+        "互动故事",
+        "世界模拟"
+      ],
+      "asOf": "2026-11-19",
+      "sources": []
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-runtime-turn-cost",
+    "title": "角色扮演每轮上下文与成本怎么测",
+    "recordType": "research",
+    "groupId": "research-runtime-turn-cost",
+    "source": "角色扮演每轮上下文与成本怎么测",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "推理成本",
+      "成本",
+      "模型选型",
+      "长上下文"
+    ],
+    "keywords": [
+      "input tokens",
+      "output tokens",
+      "token",
+      "缓存",
+      "单轮成本",
+      "p95",
+      "价格",
+      "上下文长度"
+    ],
+    "body": "每轮成本取决于角色卡、预设、世界书命中、会话历史、记忆与回复，用户输入的长度只是其中一项。测量时用多组真实上下文范围做样本，将未命中缓存的输入、缓存输入、正文、重试和记忆整理分开记。按新开场、普通续玩、长会话和高分位成本拆分，还可以算每个成功推进的回合或章节花了多少。公开聚合数据可以说明长上下文值得关注，实际预算用目标产品的日志验证。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "Roleplay 推理成本",
+        "上下文"
+      ],
+      "asOf": "2026-09",
+      "sources": [
+        {
+          "title": "OpenRouter 工作负载研究",
+          "url": "https://openrouter.ai/state-of-ai",
+          "basis": "primary"
+        }
+      ],
+      "scope": "早期项目的成本估算方法，模型价格按测量当时更新"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-model-tier",
+    "title": "按负载评估长聊、记忆和模型档位",
+    "recordType": "research",
+    "groupId": "research-model-tier",
+    "source": "按负载评估长聊、记忆和模型档位",
+    "tags": [
+      "AI Roleplay",
+      "模型选型",
+      "推理成本",
+      "付费"
+    ],
+    "keywords": [
+      "模型路由",
+      "低中高档",
+      "API",
+      "自部署",
+      "关键剧情",
+      "记忆整理",
+      "多模型"
+    ],
+    "body": "先用 API 在相同的角色、世界状态、提示和预算下跑一组普通轮、剧情转折和长程记忆评测。普通回复、质量敏感节点、摘要与记忆维护可以用不同档位。用户看到的模型套餐还可能包含上下文容量、速度或记忆权益，不能由套餐名称反推真实底层模型。是否值得自部署，用实测质量、稳定性、成本与流量来判断。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "Roleplay 模型选型",
+        "AI Dungeon",
+        "Tipsy Chat",
+        "Kindroid"
+      ],
+      "asOf": "2026-09",
+      "sources": [
+        {
+          "title": "AI Dungeon 模型说明",
+          "url": "https://help.aidungeon.com/ai-model-differences",
+          "basis": "primary"
+        },
+        {
+          "title": "Tipsy 订阅 FAQ",
+          "url": "https://tipsy.chat/subscription/faq",
+          "basis": "primary"
+        },
+        {
+          "title": "Kindroid 记忆说明",
+          "url": "https://kindroid.ai/docs/article/memory",
+          "basis": "primary"
+        }
+      ],
+      "scope": "模型评估方法，未列现行模型、套餐或 API 价格"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-structured-story-pilot",
+    "title": "小团队如何验证结构化互动故事",
+    "recordType": "research",
+    "groupId": "research-structured-story-pilot",
+    "source": "小团队如何验证结构化互动故事",
+    "tags": [
+      "AI Roleplay",
+      "互动叙事",
+      "产品验证",
+      "内容供给"
+    ],
+    "keywords": [
+      "互动短剧",
+      "剧情延续",
+      "章节完成",
+      "有限世界观",
+      "同故事复访",
+      "内容运营",
+      "创作成本"
+    ],
+    "body": "可先在有限的角色和世界里，用结构化剧情节点承载主线，让 AI 负责场内自由表达，并让关键选择产生可见后果。对照纯聊天与同题材的短故事，用首场体验完成、回到同一故事、真实购买和每个成功章节成本判断价值。测试结果决定何时扩展语音、图像、开放世界或创作者平台。",
+    "evidence": {
+      "kind": "hypothesis",
+      "subjects": [
+        "互动故事",
+        "剧情骨架"
+      ],
+      "asOf": "2026-09",
+      "sources": [],
+      "scope": "早期产品形态比较得出的实验思路"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-entrant-hypotheses",
+    "title": "Crushie、Dokichat 与 Whispy 的后发路径",
+    "recordType": "research",
+    "groupId": "research-entrant-hypotheses",
+    "source": "Crushie、Dokichat 与 Whispy 的后发路径",
+    "tags": [
+      "AI Roleplay",
+      "行业趋势",
+      "情感陪伴",
+      "获客",
+      "长记忆"
+    ],
+    "keywords": [
+      "后来者",
+      "付费展示",
+      "自然流量",
+      "差异化",
+      "续玩",
+      "情绪价值",
+      "留存"
+    ],
+    "body": "三款产品能用来提出不同问题。Crushie 可以观察付费展示与关系场景的承接，Dokichat 看角色目录与搜索怎样带来首场体验，Whispy 看具体的记忆承诺能否在后续对话里兑现。原对照样本缺同一时间内的广告花费、转化、续费和推理成本，因此各条路径仍需验证，不能用收入与下载的比值判断 ROI 或利润。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "Crushie AI",
+        "Dokichat",
+        "Whispy AI"
+      ],
+      "asOf": "2026-09",
+      "sources": [
+        {
+          "title": "Crushie AI App Store 页面",
+          "url": "https://apps.apple.com/us/app/crushie-ai-chat-companion/id6741790631",
+          "basis": "primary"
+        },
+        {
+          "title": "Dokichat App Store 页面",
+          "url": "https://apps.apple.com/us/app/dokichat-romantic-ai-chat/id6642711442",
+          "basis": "primary"
+        },
+        {
+          "title": "Whispy AI App Store 页面",
+          "url": "https://apps.apple.com/us/app/whispy-ai-create-your-story/id6770413766",
+          "basis": "primary"
+        }
+      ],
+      "aliases": [
+        "Crushie",
+        "Whispy"
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-janitor-hosted",
+    "title": "JanitorAI 的托管入口与后端选项",
+    "recordType": "research",
+    "groupId": "research-janitor-hosted",
+    "source": "JanitorAI 的托管入口与后端选项",
+    "tags": [
+      "AI Roleplay",
+      "酒馆",
+      "角色创作",
+      "托管"
+    ],
+    "keywords": [
+      "JLLM",
+      "Janitor Router",
+      "persona",
+      "主控",
+      "角色发现"
+    ],
+    "body": "JanitorAI 把找角色、写角色和对话放在网络平台上。使用预设的社区角色开局，选择自己的 persona，再用平台提供的后端或其文档支持的其他方式。公开移动 Beta 与 Web 的能力需要逐项核对。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "JanitorAI"
+      ],
+      "asOf": "2026-11-19",
+      "sources": [
+        {
+          "title": "JanitorAI 帮助中心",
+          "url": "https://help.janitorai.com/en",
+          "basis": "primary"
+        },
+        {
+          "title": "Janitor Router 帮助",
+          "url": "https://help.janitorai.com/en/article/janitor-router-1dyrzul",
+          "basis": "primary"
+        }
+      ]
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-workload-cost-breakdown",
+    "title": "如何计算一次成功章节的完整成本",
+    "recordType": "research",
+    "groupId": "research-workload-cost-breakdown",
+    "source": "如何计算一次成功章节的完整成本",
+    "tags": [
+      "AI Roleplay",
+      "商业化",
+      "成本",
+      "推理成本",
+      "章节"
+    ],
+    "keywords": [
+      "成功推进",
+      "每轮成本",
+      "消耗计量",
+      "成功率",
+      "缓存",
+      "重试",
+      "利润"
+    ],
+    "body": "对话按轮扣量时，要同时计算失败重试、跨轮记忆、免费用户、图像与语音和支付退款。产品价值可以用有效场景推进或用户完成章节衡量，这和请求次数不是一个分母。先对齐付费和成本的时间窗口，再比较章节权益与按轮权益。",
+    "evidence": {
+      "kind": "research_analysis",
+      "subjects": [
+        "Roleplay 推理成本",
+        "互动故事"
+      ],
+      "asOf": "2026-09",
+      "sources": [],
+      "scope": "来自早期实际请求结构与成本计量研究"
+    },
+    "visibility": "public"
+  },
+  {
+    "id": "research-market-h1",
+    "title": "2026 年上半年移动支出与安装量",
+    "recordType": "research",
+    "groupId": "research-market-h1",
+    "source": "AI Roleplay · 上半年移动支出",
+    "tags": [
+      "AI Roleplay",
+      "市场",
+      "商业化",
+      "移动内购",
+      "获客"
+    ],
+    "keywords": [
+      "Appfigures",
+      "H1",
+      "安装量",
+      "下载",
+      "营收",
+      "消费者支出",
+      "全球双商店"
+    ],
+    "body": "2026 年上半年，在 Decrypt 报道的 Appfigures 全球移动陪伴样本里，zeta、Tipsy Chat、Crushie AI、Emochi 的同期消费者支出估算分别约为 3300 万、1520 万、880 万、750 万美元。报道还给出 Emochi 约 790 万安装、zeta 约 300 万安装。两个排行回答不同的问题。安装量不是活跃或付费用户数，样本中的支出包括存量用户消费，且无法与其他来源的一季度估算相减求第二季度。",
+    "evidence": {
+      "kind": "external_fact",
+      "subjects": [
+        "zeta",
+        "Tipsy Chat",
+        "Crushie AI",
+        "Emochi"
+      ],
+      "aliases": [
+        "제타",
+        "Tipsy",
+        "Crushie"
+      ],
+      "asOf": "2026-06-30",
+      "scope": "全球 App Store 与 Google Play，Appfigures 经媒体转述的浪漫与成人向陪伴样本，消费者支出估算，不含 Web",
+      "sources": [
+        {
+          "title": "Decrypt 转述 Appfigures 的上半年陪伴应用数据",
+          "url": "https://decrypt.co/373395/how-much-your-boyfriend-spending-ai-girlfriends",
+          "basis": "reported"
+        }
+      ]
+    },
+    "visibility": "public"
+  }
+]

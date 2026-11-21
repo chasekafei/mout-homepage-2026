@@ -1,4 +1,4 @@
-import type { ChatMessage, PersonalFact } from "./types.js";
+import type { ChatMessage, PersonalFact, ResearchSource } from "./types.js";
 
 const normalize = (value: string) => value.toLocaleLowerCase("zh-CN").replace(/\s+/g, " ");
 const compact = (value: string) => normalize(value).replace(/[^\p{L}\p{N}]+/gu, "");
@@ -154,6 +154,73 @@ export function shouldUseSemanticRetrieval(
   return (rankFacts(query, facts)[0]?.score ?? 0) < minimumLexicalConfidence;
 }
 
+export type EvidenceLane = {
+  kind: "personal" | "research";
+  facts: PersonalFact[];
+  limit: number;
+};
+
+/** Decide which materials can support the question before ranking within each pool. */
+export function planEvidenceRetrieval(query: string, facts: PersonalFact[], limit: number): EvidenceLane[] {
+  const personal = facts.filter((fact) => fact.visibility === "public" && fact.recordType !== "research");
+  const research = facts.filter((fact) => fact.visibility === "public" && fact.recordType === "research" && fact.evidence);
+  const text = normalize(query);
+  const ownership = isSelfIntroductionQuery(text) || isProductOverviewQuery(text)
+    || /(?:你|mout|闫宇琨)[^。？！?!；;]{0,36}(?:[做创作](?:过|的|了)|任职|负责|参与(?:过|的|了)|开发(?:过|的|了)|履历|经历)|\b(?:did you (?:build|work on|found|own|lead)|your (?:work|role|career|experience|portfolio|team))\b/iu.test(text);
+  const industry = /行业|竞品|外部|市[场場]|第三方|同类|同行|industry|competitor|market|alternatives?/iu.test(text);
+  const comparison = /对比|比较|区别|差异|相比|对照|vs\.?\b|compar(?:e|ed|ison)|differen(?:ce|t)/iu.test(text);
+  const asksForView = /你(?:自己)?(?:怎么|如何|怎样|觉得)|你.{0,20}(?:看法|观点)|your (?:take|view|opinion)|what do you think/iu.test(text);
+  const subjectInQuery = (subject: string) => {
+    const term = normalize(subject);
+    if (!/^[a-z0-9]/u.test(term)) return text.includes(term);
+    const literal = term.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    return new RegExp(`(?<![a-z0-9])${literal}(?![a-z0-9])`, "u").test(text);
+  };
+  const mentioned = research.filter(({ evidence }) => evidence && [...evidence.subjects, ...(evidence.aliases ?? [])].some(subjectInQuery));
+  const topical = research.filter(({ tags, keywords }) => tags.some(subjectInQuery)
+    && (industry || comparison || (keywords ?? []).some(subjectInQuery)));
+  const hasResearchTopic = mentioned.length > 0 || topical.length > 0;
+  const owned = ownership
+    ? personal.filter((fact) => fact.recordType !== "blog" && fact.recordType !== "industry_notes" && fact.recordType !== "opinion")
+    : personal;
+  const profile = { kind: "personal" as const, facts: owned, limit };
+  if (!hasResearchTopic || (ownership && !(comparison || industry))) return [profile];
+
+  const candidates = [...new Set([...mentioned, ...topical])];
+  const outside = { kind: "research" as const, facts: candidates, limit };
+  if (!ownership && !asksForView) return [outside];
+  if (limit <= 1) return ownership ? [profile] : [outside];
+  // A mixed question needs both kinds of evidence. Keep the total within the turn budget.
+  const researchBudget = ownership ? Math.floor(limit / 3) : Math.ceil(limit * 2 / 3);
+  outside.limit = Math.min(outside.limit, Math.max(1, researchBudget), candidates.length);
+  profile.limit = limit - outside.limit;
+  if (ownership) return [profile, outside];
+  profile.facts = personal.filter((fact) => fact.recordType === "opinion" || fact.recordType === "blog" || fact.recordType === "industry_notes");
+  return [outside, profile];
+}
+
+export function buildResearchContext(facts: PersonalFact[]): { context: string[]; sources: Map<number, ResearchSource> } {
+  const sources = new Map<number, ResearchSource>();
+  const idsByUrl = new Map<string, number>();
+  const basisLabel = { primary: "原始公开出处", estimate: "第三方估算", reported: "公开转述" };
+  const context = facts.flatMap((fact) => {
+    if (fact.recordType !== "research" || !fact.evidence || fact.visibility !== "public") return [];
+    const { kind, subjects, asOf, scope } = fact.evidence;
+    const label = { external_fact: "外部事实", research_analysis: "调研分析", hypothesis: "待验证的假设" }[kind];
+    const refs = fact.evidence.sources.map((source) => {
+      let id = idsByUrl.get(source.url);
+      if (!id) {
+        id = sources.size + 1;
+        idsByUrl.set(source.url, id);
+        sources.set(id, source);
+      }
+      return `[[R${id}]] ${source.title}（${basisLabel[source.basis]}）`;
+    });
+    return [`${label} · ${fact.title}\n对象：${subjects.join("、")} · 时间锚点：${asOf}${scope ? ` · 口径：${scope}` : ""}\n${fact.body}${refs.length ? `\n可引用出处：${refs.join("；")}` : ""}`];
+  });
+  return { context, sources };
+}
+
 /** Avoids filling the prompt with weak matches when only a few facts are relevant. */
 export function retrieveFacts(
   query: string | string[],
@@ -169,6 +236,7 @@ export function retrieveFacts(
   if (!productOverview && bestScore < (hasSemanticScores ? 0.001 : 1.5)) return [];
   const selected: PersonalFact[] = [];
   const blogGroupCounts = new Map<string, number>();
+  const researchGroupCounts = new Map<string, number>();
   const resumePageCounts = new Map<string, number>();
   let resumeSourceCount = 0;
   let oralHistoryCount = 0;
@@ -186,6 +254,12 @@ export function retrieveFacts(
       const explicitlyRequested = queryTerms[0]?.size
         && [...explicitTerms].some((term) => term.length > 1 && queryTerms[0].has(term));
       if (!explicitlyRequested) return false;
+    }
+    if (fact.recordType === "research") {
+      const groupId = fact.groupId ?? fact.id;
+      const count = researchGroupCounts.get(groupId) ?? 0;
+      if (count >= 3) return false;
+      researchGroupCounts.set(groupId, count + 1);
     }
     if (fact.recordType === "blog") {
       const groupId = fact.groupId ?? fact.id;
@@ -291,9 +365,10 @@ export function retrieveFacts(
   }
 
   const bestIndexedScore = ranked.find(({ fact }) => fact.recordType !== "resume_source")?.score ?? 0;
+  const researchOnly = facts.every((fact) => fact.recordType === "research");
   const normalThreshold = hasSemanticScores
     ? Math.max(0.001, bestIndexedScore * 0.28)
-    : Math.max(1.5, bestIndexedScore * 0.68);
+    : Math.max(1.5, bestIndexedScore * (researchOnly ? 0.44 : 0.68));
   const resumeBackedSummaries = ranked
     .filter(({ fact, score }) => score >= normalThreshold
       && fact.recordType !== "resume_source"
@@ -341,7 +416,7 @@ export function factContext(facts: PersonalFact[]): string[] {
     .replace(/\s{2,}/gu, " ")
     .trim();
 
-  return facts.map((fact) => {
+  return facts.filter((fact) => fact.recordType !== "research").map((fact) => {
     if (fact.recordType === "resume_source") {
       return `记忆·我的经历·原文：\n${fact.title}\n${fact.body}`;
     }
